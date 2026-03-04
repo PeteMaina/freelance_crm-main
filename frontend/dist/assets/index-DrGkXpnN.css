@@ -1,0 +1,1 @@
+*,*:before,*:after{box-sizing:border-box}html,body,#root{width:100%;min-height:100%}body{margin:0;color:#191611;background-color:#f5f2ea;background-image:radial-gradient(circle at 10% 12%,rgba(21,94,99,.16),transparent 35%),radial-gradient(circle at 84% 78%,rgba(180,73,21,.13),transparent 28%),linear-gradient(180deg,#f5f2ea,#f3efe5)}::selection{background-color:#155e6347}
