@@ -3,6 +3,9 @@ import CallRoundedIcon from "@mui/icons-material/CallRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import WorkspacesRoundedIcon from "@mui/icons-material/WorkspacesRounded";
+import BugReportRoundedIcon from "@mui/icons-material/BugReportRounded";
+import FlagRoundedIcon from "@mui/icons-material/FlagRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import {
   Alert,
   Box,
@@ -23,55 +26,152 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Tabs,
+  Tab,
+  Card,
+  CardContent,
+  Avatar,
+  Rating,
+  Divider,
+  Autocomplete,
+  FormControlLabel,
+  Switch,
+  FormLabel,
+  RadioGroup,
+  Radio,
+  Tooltip,
+  Badge,
+  Paper,
+  ToggleButton,
+  ToggleButtonGroup
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
-import { createCall, listCalls, toggleCall } from "../api/callApi";
-import { createClient, listClients } from "../api/clientApi";
-import { createProject, listProjects, togglePhase } from "../api/projectApi";
+import { createCall, listCalls, toggleCall, getUpcomingCalls, getOverdueCalls } from "../api/callApi";
+import { createClient, listClients, updateClient, deleteClient, getClientMetrics, searchClients, createContact, listContacts } from "../api/clientApi";
+import { createProject, listProjects, togglePhase, createTask, listTasks, toggleTask, createMilestone, listMilestones, toggleMilestone, createBug, listBugs, updateProject, updateTask, deleteProject } from "../api/projectApi";
 import AppShell from "../components/AppShell";
 import KpiCard from "../components/KpiCard";
 import SectionFrame from "../components/SectionFrame";
 
 const sectionConfig = [
   { key: "overview", label: "Overview", hint: "Live health indicators" },
-  { key: "clients", label: "Clients", hint: "Client intake and list" },
+  { key: "clients", label: "Clients", hint: "Client intake and management" },
   { key: "projects", label: "Projects", hint: "Execution and progress" },
+  { key: "tasks", label: "Tasks", hint: "Task management" },
+  { key: "milestones", label: "Milestones", hint: "Project milestones" },
+  { key: "bugs", label: "Bugs", hint: "Bug tracking" },
   { key: "calls", label: "Calls", hint: "Follow-ups and cadence" }
 ];
 
 const defaultClientForm = {
   name: "",
   email: "",
-  phone: ""
+  phone: "",
+  company: "",
+  address: "",
+  industry: "",
+  source: "",
+  status: "active",
+  rating: 0,
+  budget_range_min: "",
+  budget_range_max: "",
+  timezone: "",
+  language: "en",
+  notes: "",
+  tags: "",
+  payment_terms: "net30"
 };
 
 const defaultProjectForm = {
   title: "",
   description: "",
   status: "active",
+  priority: "medium",
+  category: "",
+  tags: "",
+  is_personal: false,
+  is_growth: false,
+  budget: "",
+  hourly_rate: "",
+  currency: "USD",
+  billing_type: "hourly",
   start_date: "",
   expected_end_date: "",
   client_id: ""
 };
 
+const defaultTaskForm = {
+  title: "",
+  description: "",
+  status: "todo",
+  priority: "medium",
+  assignee: "",
+  due_date: "",
+  start_date: "",
+  estimated_hours: "",
+  tags: ""
+};
+
+const defaultMilestoneForm = {
+  title: "",
+  description: "",
+  due_date: ""
+};
+
+const defaultBugForm = {
+  title: "",
+  description: "",
+  severity: "medium",
+  priority: "medium",
+  status: "open",
+  steps_to_reproduce: "",
+  expected_behavior: "",
+  actual_behavior: "",
+  environment: "development",
+  browser: "",
+  operating_system: "",
+  assignee: "",
+  reporter: ""
+};
+
 const defaultCallForm = {
   title: "",
-  notes: ""
+  notes: "",
+  scheduled_at: "",
+  duration: 30,
+  call_type: "general"
 };
 
 function statusColor(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized.includes("active")) {
-    return "success";
-  }
-  if (normalized.includes("hold")) {
-    return "warning";
-  }
-  if (normalized.includes("done") || normalized.includes("complete")) {
-    return "default";
-  }
+  if (normalized.includes("active")) return "success";
+  if (normalized.includes("hold")) return "warning";
+  if (normalized.includes("done") || normalized.includes("complete") || normalized.includes("resolved") || normalized.includes("closed")) return "default";
+  if (normalized.includes("prospect")) return "info";
+  if (normalized.includes("archived")) return "default";
   return "primary";
+}
+
+function priorityColor(priority) {
+  const normalized = String(priority || "").toLowerCase();
+  if (normalized.includes("critical")) return "error";
+  if (normalized.includes("high")) return "warning";
+  if (normalized.includes("medium")) return "info";
+  return "default";
+}
+
+function severityColor(severity) {
+  const normalized = String(severity || "").toLowerCase();
+  if (normalized.includes("critical")) return "error";
+  if (normalized.includes("high")) return "warning";
+  if (normalized.includes("medium")) return "info";
+  return "default";
 }
 
 export default function DashboardPage({ token, email, onLogout }) {
@@ -80,15 +180,38 @@ export default function DashboardPage({ token, email, onLogout }) {
   const [submitting, setSubmitting] = useState("");
   const [error, setError] = useState("");
 
+  // Data states
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [milestones, setMilestones] = useState([]);
+  const [bugs, setBugs] = useState([]);
   const [callsByProject, setCallsByProject] = useState({});
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [allCalls, setAllCalls] = useState([]);
 
+  // Form states
   const [clientForm, setClientForm] = useState(defaultClientForm);
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
+  const [taskForm, setTaskForm] = useState(defaultTaskForm);
+  const [milestoneForm, setMilestoneForm] = useState(defaultMilestoneForm);
+  const [bugForm, setBugForm] = useState(defaultBugForm);
   const [callForm, setCallForm] = useState(defaultCallForm);
-  const [phaseIdInput, setPhaseIdInput] = useState("");
+
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+
+  // Dialog states
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
+  const [editClient, setEditClient] = useState(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [editProject, setEditProject] = useState(null);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editTask, setEditTask] = useState(null);
+  const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
+  const [bugDialogOpen, setBugDialogOpen] = useState(false);
 
   const [snack, setSnack] = useState({
     open: false,
@@ -96,56 +219,122 @@ export default function DashboardPage({ token, email, onLogout }) {
     message: ""
   });
 
-  const allCalls = useMemo(() => {
-    return Object.values(callsByProject).flat();
-  }, [callsByProject]);
+  const filteredClients = useMemo(() => {
+    let result = clients;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(c => 
+        c.name?.toLowerCase().includes(query) || 
+        c.email?.toLowerCase().includes(query) ||
+        c.company?.toLowerCase().includes(query)
+      );
+    }
+    if (filterStatus) {
+      result = result.filter(c => c.status === filterStatus);
+    }
+    return result;
+  }, [clients, searchQuery, filterStatus]);
+
+  const filteredProjects = useMemo(() => {
+    let result = projects;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(p => p.title?.toLowerCase().includes(query));
+    }
+    if (filterStatus) {
+      result = result.filter(p => p.status === filterStatus);
+    }
+    if (filterPriority) {
+      result = result.filter(p => p.priority === filterPriority);
+    }
+    return result;
+  }, [projects, searchQuery, filterStatus, filterPriority]);
+
+  const filteredTasks = useMemo(() => {
+    let result = tasks;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t => t.title?.toLowerCase().includes(query));
+    }
+    if (filterStatus) {
+      result = result.filter(t => t.status === filterStatus);
+    }
+    if (filterPriority) {
+      result = result.filter(t => t.priority === filterPriority);
+    }
+    return result;
+  }, [tasks, searchQuery, filterStatus, filterPriority]);
 
   const selectedProjectCalls = useMemo(() => {
-    if (!selectedProjectId) {
-      return [];
-    }
+    if (!selectedProjectId) return [];
     return callsByProject[selectedProjectId] || [];
   }, [callsByProject, selectedProjectId]);
 
   const metrics = useMemo(() => {
-    const activeProjects = projects.filter((project) =>
-      String(project.status || "").toLowerCase().includes("active")
-    ).length;
-    const totalProgress = projects.reduce((sum, project) => sum + (project.progress || 0), 0);
+    const activeProjects = projects.filter(p => String(p.status || "").toLowerCase().includes("active")).length;
+    const totalProgress = projects.reduce((sum, p) => sum + (p.progress || 0), 0);
     const averageProgress = projects.length ? Math.round(totalProgress / projects.length) : 0;
-    const openCalls = allCalls.filter((item) => !item.completed).length;
+    const openCalls = allCalls.filter(c => !c.completed).length;
+    const overdueCalls = allCalls.filter(c => !c.completed && c.scheduled_at && new Date(c.scheduled_at) < new Date()).length;
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.is_completed).length;
+    const openBugs = bugs.filter(b => b.status === "open").length;
+    const criticalBugs = bugs.filter(b => b.severity === "critical" && b.status !== "closed").length;
+    const upcomingMilestones = milestones.filter(m => !m.is_completed && m.due_date && new Date(m.due_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)).length;
 
     return {
       clientCount: clients.length,
       projectCount: projects.length,
       activeProjects,
       averageProgress,
-      openCalls
+      openCalls,
+      overdueCalls,
+      totalTasks,
+      completedTasks,
+      taskCompletionRate: totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      openBugs,
+      criticalBugs,
+      upcomingMilestones,
+      totalRevenue: clients.reduce((sum, c) => sum + (c.total_revenue || 0), 0)
     };
-  }, [clients, projects, allCalls]);
+  }, [clients, projects, tasks, bugs, allCalls, milestones]);
 
   useEffect(() => {
     void hydrate();
   }, [token]);
 
   function notify(message, severity = "success") {
-    setSnack({
-      open: true,
-      severity,
-      message
-    });
+    setSnack({ open: true, severity, message });
   }
 
   async function hydrate() {
     setLoading(true);
     setError("");
     try {
-      const [clientData, projectData] = await Promise.all([listClients(token), listProjects(token)]);
+      const [clientData, projectData, allTasksData, allMilestonesData, allBugsData, allCallsData] = await Promise.all([
+        listClients(token),
+        listProjects(token),
+        listAllTasks(token),
+        listAllMilestones(token),
+        listAllBugs(token),
+        listCalls(token)
+      ]);
 
       const safeClients = clientData || [];
       const safeProjects = projectData || [];
-      const callsMap = {};
+      const safeTasks = allTasksData || [];
+      const safeMilestones = allMilestonesData || [];
+      const safeBugs = allBugsData || [];
+      const safeCalls = allCallsData || [];
 
+      setClients(safeClients);
+      setProjects(safeProjects);
+      setTasks(safeTasks);
+      setMilestones(safeMilestones);
+      setBugs(safeBugs);
+      setAllCalls(safeCalls);
+
+      const callsMap = {};
       await Promise.all(
         safeProjects.map(async (project) => {
           try {
@@ -156,14 +345,10 @@ export default function DashboardPage({ token, email, onLogout }) {
           }
         })
       );
-
-      setClients(safeClients);
-      setProjects(safeProjects);
       setCallsByProject(callsMap);
-      setSelectedProjectId((previous) => {
-        if (previous && callsMap[previous]) {
-          return previous;
-        }
+
+      setSelectedProjectId(prev => {
+        if (prev && callsMap[prev]) return prev;
         return safeProjects.length ? String(safeProjects[0].id) : "";
       });
     } catch (hydrateError) {
@@ -173,75 +358,243 @@ export default function DashboardPage({ token, email, onLogout }) {
     }
   }
 
-  async function refreshProjectsOnly() {
-    const projectData = await listProjects(token);
-    setProjects(projectData || []);
-  }
-
+  // Client handlers
   async function handleClientSubmit(event) {
     event.preventDefault();
     setSubmitting("client");
     try {
-      const created = await createClient(clientForm, token);
-      setClients((previous) => [...previous, created]);
+      if (editClient) {
+        await updateClient(editClient.id, clientForm, token);
+        notify("Client updated.");
+      } else {
+        await createClient(clientForm, token);
+        notify("Client created.");
+      }
       setClientForm(defaultClientForm);
-      notify("Client added.");
+      setEditClient(null);
+      setClientDialogOpen(false);
+      await hydrate();
     } catch (submitError) {
-      notify(submitError.message || "Could not create client.", "error");
+      notify(submitError.message || "Could not save client.", "error");
     } finally {
       setSubmitting("");
     }
   }
 
+  async function handleDeleteClient(clientId) {
+    if (!confirm("Are you sure you want to delete this client? All related projects will also be deleted.")) return;
+    setSubmitting("delete-client");
+    try {
+      await deleteClient(clientId, token);
+      notify("Client deleted.");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not delete client.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  function openEditClient(client) {
+    setEditClient(client);
+    setClientForm({
+      name: client.name || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      company: client.company || "",
+      address: client.address || "",
+      industry: client.industry || "",
+      source: client.source || "",
+      status: client.status || "active",
+      rating: client.rating || 0,
+      budget_range_min: client.budget_range_min || "",
+      budget_range_max: client.budget_range_max || "",
+      timezone: client.timezone || "",
+      language: client.language || "en",
+      notes: client.notes || "",
+      tags: client.tags || "",
+      payment_terms: client.payment_terms || "net30"
+    });
+    setClientDialogOpen(true);
+  }
+
+  // Project handlers
   async function handleProjectSubmit(event) {
     event.preventDefault();
     setSubmitting("project");
     try {
-      await createProject(
-        {
-          title: projectForm.title,
-          description: projectForm.description || null,
-          status: projectForm.status,
-          start_date: projectForm.start_date || null,
-          expected_end_date: projectForm.expected_end_date || null,
-          client_id: Number(projectForm.client_id)
-        },
-        token
-      );
+      const projectData = {
+        ...projectForm,
+        client_id: Number(projectForm.client_id),
+        budget: projectForm.budget ? Number(projectForm.budget) : null,
+        hourly_rate: projectForm.hourly_rate ? Number(projectForm.hourly_rate) : null
+      };
+      
+      if (editProject) {
+        await updateProject(editProject.id, projectData, token);
+        notify("Project updated.");
+      } else {
+        await createProject(projectData, token);
+        notify("Project created.");
+      }
       setProjectForm(defaultProjectForm);
+      setEditProject(null);
+      setProjectDialogOpen(false);
       await hydrate();
-      setSection("projects");
-      notify("Project created and phase pipeline initialized.");
     } catch (submitError) {
-      notify(submitError.message || "Could not create project.", "error");
+      notify(submitError.message || "Could not save project.", "error");
     } finally {
       setSubmitting("");
     }
   }
 
+  function openEditProject(project) {
+    setEditProject(project);
+    setProjectForm({
+      title: project.title || "",
+      description: project.description || "",
+      status: project.status || "active",
+      priority: project.priority || "medium",
+      category: project.category || "",
+      tags: project.tags || "",
+      is_personal: project.is_personal || false,
+      is_growth: project.is_growth || false,
+      budget: project.budget || "",
+      hourly_rate: project.hourly_rate || "",
+      currency: project.currency || "USD",
+      billing_type: project.billing_type || "hourly",
+      start_date: project.start_date || "",
+      expected_end_date: project.expected_end_date || "",
+      client_id: project.client_id || ""
+    });
+    setProjectDialogOpen(true);
+  }
+
+  async function handleDeleteProject(projectId) {
+    if (!confirm("Are you sure you want to delete this project?")) return;
+    setSubmitting("delete-project");
+    try {
+      await deleteProject(projectId, token);
+      notify("Project deleted.");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not delete project.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  // Task handlers
+  async function handleTaskSubmit(event) {
+    event.preventDefault();
+    if (!selectedProjectId) {
+      notify("Select a project first.", "warning");
+      return;
+    }
+    setSubmitting("task");
+    try {
+      const taskData = {
+        ...taskForm,
+        project_id: Number(selectedProjectId),
+        estimated_hours: taskForm.estimated_hours ? Number(taskForm.estimated_hours) : null
+      };
+      await createTask(selectedProjectId, taskData, token);
+      setTaskForm(defaultTaskForm);
+      setTaskDialogOpen(false);
+      notify("Task created.");
+      await hydrate();
+    } catch (submitError) {
+      notify(submitError.message || "Could not create task.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  async function handleToggleTask(taskId) {
+    setSubmitting(`task-toggle-${taskId}`);
+    try {
+      await toggleTask(taskId, token);
+      notify("Task updated.");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not toggle task.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  // Milestone handlers
+  async function handleMilestoneSubmit(event) {
+    event.preventDefault();
+    if (!selectedProjectId) {
+      notify("Select a project first.", "warning");
+      return;
+    }
+    setSubmitting("milestone");
+    try {
+      await createMilestone(selectedProjectId, milestoneForm, token);
+      setMilestoneForm(defaultMilestoneForm);
+      setMilestoneDialogOpen(false);
+      notify("Milestone created.");
+      await hydrate();
+    } catch (submitError) {
+      notify(submitError.message || "Could not create milestone.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  async function handleToggleMilestone(milestoneId) {
+    setSubmitting(`milestone-toggle-${milestoneId}`);
+    try {
+      await toggleMilestone(milestoneId, token);
+      notify("Milestone updated.");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not toggle milestone.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  // Bug handlers
+  async function handleBugSubmit(event) {
+    event.preventDefault();
+    if (!selectedProjectId) {
+      notify("Select a project first.", "warning");
+      return;
+    }
+    setSubmitting("bug");
+    try {
+      await createBug(selectedProjectId, bugForm, token);
+      setBugForm(defaultBugForm);
+      setBugDialogOpen(false);
+      notify("Bug reported.");
+      await hydrate();
+    } catch (submitError) {
+      notify(submitError.message || "Could not create bug.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  // Call handlers
   async function handleCallSubmit(event) {
     event.preventDefault();
     if (!selectedProjectId) {
       notify("Select a project first.", "warning");
       return;
     }
-
     setSubmitting("call");
     try {
-      const created = await createCall(
-        {
-          ...callForm,
-          project_id: Number(selectedProjectId)
-        },
-        token
-      );
-
-      setCallsByProject((previous) => ({
-        ...previous,
-        [selectedProjectId]: [...(previous[selectedProjectId] || []), created]
-      }));
+      const callData = {
+        ...callForm,
+        project_id: Number(selectedProjectId)
+      };
+      await createCall(callData, token);
       setCallForm(defaultCallForm);
       notify("Call task saved.");
+      await hydrate();
     } catch (submitError) {
       notify(submitError.message || "Could not save call.", "error");
     } finally {
@@ -252,84 +605,47 @@ export default function DashboardPage({ token, email, onLogout }) {
   async function handleToggleCall(callId) {
     setSubmitting(`call-toggle-${callId}`);
     try {
-      const updated = await toggleCall(callId, token);
-      const projectKey = String(updated.project_id);
-      setCallsByProject((previous) => ({
-        ...previous,
-        [projectKey]: (previous[projectKey] || []).map((item) => {
-          if (item.id === updated.id) {
-            return updated;
-          }
-          return item;
-        })
-      }));
+      await toggleCall(callId, token);
       notify("Call status updated.");
-    } catch (toggleError) {
-      notify(toggleError.message || "Could not toggle call.", "error");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not toggle call.", "error");
     } finally {
       setSubmitting("");
     }
   }
 
-  async function handleTogglePhase() {
-    const phaseId = Number(phaseIdInput);
-    if (!phaseId) {
-      notify("Enter a valid phase ID.", "warning");
-      return;
-    }
-
-    setSubmitting("phase");
-    try {
-      await togglePhase(phaseId, token);
-      setPhaseIdInput("");
-      await refreshProjectsOnly();
-      notify(`Phase ${phaseId} toggled.`);
-    } catch (phaseError) {
-      notify(phaseError.message || "Could not toggle phase.", "error");
-    } finally {
-      setSubmitting("");
-    }
-  }
-
+  // Render functions
   function renderOverview() {
     return (
       <Stack spacing={3}>
-        <SectionFrame
-          title="Command Pulse"
-          subtitle="A live snapshot of your freelance operation."
-        >
+        <SectionFrame title="Command Pulse" subtitle="A live snapshot of your freelance operation.">
           <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <KpiCard
-                label="Total Clients"
-                value={metrics.clientCount}
-                hint="How many accounts are in your pipeline"
-                tone="sea"
-              />
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Total Clients" value={metrics.clientCount} hint="Accounts in your CRM" tone="sea" />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <KpiCard
-                label="Projects Running"
-                value={metrics.activeProjects}
-                hint={`${metrics.projectCount} projects in total`}
-                tone="amber"
-              />
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Projects Running" value={metrics.activeProjects} hint={`${metrics.projectCount} total`} tone="amber" />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <KpiCard
-                label="Average Progress"
-                value={`${metrics.averageProgress}%`}
-                hint="Across every project currently tracked"
-                tone="moss"
-              />
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Avg Progress" value={`${metrics.averageProgress}%`} hint="Across all projects" tone="moss" />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <KpiCard
-                label="Open Calls"
-                value={metrics.openCalls}
-                hint="Pending communication tasks"
-                tone="rust"
-              />
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Open Calls" value={metrics.openCalls} hint={`${metrics.overdueCalls} overdue`} tone="rust" />
+            </Grid>
+          </Grid>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Total Tasks" value={metrics.totalTasks} hint={`${metrics.completedTasks} done`} tone="sea" />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Task Completion" value={`${metrics.taskCompletionRate}%`} hint="Overall completion" tone="moss" />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Open Bugs" value={metrics.openBugs} hint={`${metrics.criticalBugs} critical`} tone="rust" />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <KpiCard label="Upcoming Milestones" value={metrics.upcomingMilestones} hint="Due in 7 days" tone="amber" />
             </Grid>
           </Grid>
         </SectionFrame>
@@ -341,84 +657,96 @@ export default function DashboardPage({ token, email, onLogout }) {
                 <TableHead>
                   <TableRow>
                     <TableCell>Project</TableCell>
-                    <TableCell>Client ID</TableCell>
+                    <TableCell>Client</TableCell>
+                    <TableCell>Priority</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Progress</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {projects.length ? (
-                    projects.map((project) => (
+                    projects.slice(0, 8).map(project => (
                       <TableRow key={project.id} hover>
-                        <TableCell>{project.title}</TableCell>
-                        <TableCell>{project.client_id}</TableCell>
                         <TableCell>
-                          <Chip
-                            label={project.status || "active"}
-                            size="small"
-                            color={statusColor(project.status)}
-                            variant="outlined"
-                          />
+                          <Typography variant="body2" fontWeight={600}>{project.title}</Typography>
+                          {project.is_personal && <Chip size="small" label="Personal" sx={{ ml: 1 }} />}
+                          {project.is_growth && <Chip size="small" label="Growth" color="secondary" sx={{ ml: 0.5 }} />}
                         </TableCell>
-                        <TableCell sx={{ minWidth: 160 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={project.progress || 0}
-                            sx={{ height: 8, borderRadius: 10, mb: 0.75 }}
-                          />
+                        <TableCell>#{project.client_id}</TableCell>
+                        <TableCell>
+                          <Chip size="small" label={project.priority || "medium"} color={priorityColor(project.priority)} variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={project.status || "active"} color={statusColor(project.status)} variant="outlined" />
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 120 }}>
+                          <LinearProgress variant="determinate" value={project.progress || 0} sx={{ height: 8, borderRadius: 10, mb: 0.5 }} />
                           <Typography variant="caption">{project.progress || 0}%</Typography>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow>
-                      <TableCell colSpan={4}>No projects yet.</TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={5}>No projects yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </SectionFrame>
           </Grid>
           <Grid item xs={12} lg={5}>
-            <SectionFrame
-              title="Priority Calls"
-              subtitle="The next communication actions across projects."
-            >
-              <Stack spacing={1.25}>
-                {allCalls.length ? (
-                  allCalls.slice(0, 8).map((callItem) => (
-                    <Box
-                      key={callItem.id}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        border: "1px solid rgba(25,22,17,0.12)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1.5,
-                        bgcolor: callItem.completed ? "rgba(47,122,74,0.08)" : "transparent"
-                      }}
-                    >
+            <SectionFrame title="Priority Tasks" subtitle="Tasks requiring attention.">
+              <Stack spacing={1}>
+                {tasks.length ? (
+                  tasks.slice(0, 8).map(task => (
+                    <Box key={task.id} sx={{ p: 1.5, borderRadius: 2, border: "1px solid rgba(25,22,17,0.12)", display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: task.is_completed ? "rgba(47,122,74,0.08)" : "transparent" }}>
                       <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700 }} noWrap>
-                          {callItem.title}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Project #{callItem.project_id}
-                        </Typography>
+                        <Typography sx={{ fontWeight: 600 }} noWrap>{task.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">#{task.project_id} • {task.status}</Typography>
                       </Box>
-                      <Chip
-                        label={callItem.completed ? "Completed" : "Pending"}
-                        size="small"
-                        color={callItem.completed ? "success" : "warning"}
-                      />
+                      <Stack direction="row" spacing={0.5}>
+                        <Chip size="small" label={task.priority} color={priorityColor(task.priority)} />
+                        <Button size="small" onClick={() => handleToggleTask(task.id)} disabled={submitting === `task-toggle-${task.id}`}>
+                          {task.is_completed ? "Done" : "Mark"}
+                        </Button>
+                      </Stack>
                     </Box>
                   ))
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Calls will appear here once you create them.
-                  </Typography>
+                  <Typography variant="body2" color="text.secondary">No tasks yet.</Typography>
+                )}
+              </Stack>
+            </SectionFrame>
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <SectionFrame title="Critical Bugs" subtitle="Bugs requiring immediate attention.">
+              <Stack spacing={1}>
+                {bugs.filter(b => b.severity === "critical" && b.status !== "closed").length ? (
+                  bugs.filter(b => b.severity === "critical" && b.status !== "closed").slice(0, 5).map(bug => (
+                    <Box key={bug.id} sx={{ p: 1.5, borderRadius: 2, border: "1px solid rgba(244,67,54,0.3)", bgcolor: "rgba(244,67,54,0.05)" }}>
+                      <Typography sx={{ fontWeight: 600 }}>{bug.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">#{bug.project_id} • {bug.status}</Typography>
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No critical bugs.</Typography>
+                )}
+              </Stack>
+            </SectionFrame>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <SectionFrame title="Upcoming Milestones" subtitle="Milestones due soon.">
+              <Stack spacing={1}>
+                {milestones.filter(m => !m.is_completed && m.due_date).length ? (
+                  milestones.filter(m => !m.is_completed && m.due_date).slice(0, 5).map(milestone => (
+                    <Box key={milestone.id} sx={{ p: 1.5, borderRadius: 2, border: "1px solid rgba(25,22,17,0.12)" }}>
+                      <Typography sx={{ fontWeight: 600 }}>{milestone.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">#{milestone.project_id} • Due: {milestone.due_date}</Typography>
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No upcoming milestones.</Typography>
                 )}
               </Stack>
             </SectionFrame>
@@ -430,251 +758,605 @@ export default function DashboardPage({ token, email, onLogout }) {
 
   function renderClients() {
     return (
-      <Grid container spacing={3}>
-        <Grid item xs={12} lg={4}>
-          <SectionFrame title="Add Client" subtitle="Register new accounts quickly.">
-            <Box component="form" onSubmit={handleClientSubmit}>
-              <Stack spacing={1.5}>
-                <TextField
-                  required
-                  label="Client Name"
-                  value={clientForm.name}
-                  onChange={(event) =>
-                    setClientForm((previous) => ({ ...previous, name: event.target.value }))
-                  }
-                />
-                <TextField
-                  label="Email"
-                  type="email"
-                  value={clientForm.email}
-                  onChange={(event) =>
-                    setClientForm((previous) => ({ ...previous, email: event.target.value }))
-                  }
-                />
-                <TextField
-                  label="Phone"
-                  value={clientForm.phone}
-                  onChange={(event) =>
-                    setClientForm((previous) => ({ ...previous, phone: event.target.value }))
-                  }
-                />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={<GroupRoundedIcon />}
-                  disabled={submitting === "client"}
-                >
-                  {submitting === "client" ? "Saving..." : "Create Client"}
-                </Button>
-              </Stack>
-            </Box>
-          </SectionFrame>
+      <Stack spacing={3}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5">Clients ({filteredClients.length})</Typography>
+          <Button variant="contained" startIcon={<GroupRoundedIcon />} onClick={() => { setEditClient(null); setClientForm(defaultClientForm); setClientDialogOpen(true); }}>
+            Add Client
+          </Button>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <TextField fullWidth placeholder="Search clients..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="small" />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select value={filterStatus} label="Status" onChange={e => setFilterStatus(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="prospect">Prospect</MenuItem>
+                <MenuItem value="on_hold">On Hold</MenuItem>
+                <MenuItem value="archived">Archived</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
         </Grid>
-        <Grid item xs={12} lg={8}>
-          <SectionFrame title="Client Ledger" subtitle={`${clients.length} clients in your CRM.`}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>ID</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Phone</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {clients.length ? (
-                  clients.map((client) => (
-                    <TableRow key={client.id} hover>
-                      <TableCell>{client.id}</TableCell>
-                      <TableCell>{client.name}</TableCell>
-                      <TableCell>{client.email || "-"}</TableCell>
-                      <TableCell>{client.phone || "-"}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4}>No clients yet.</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </SectionFrame>
+
+        <Grid container spacing={2}>
+          {filteredClients.length ? filteredClients.map(client => (
+            <Grid item xs={12} md={6} lg={4} key={client.id}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Avatar sx={{ bgcolor: 'primary.main' }}>{client.name?.charAt(0).toUpperCase()}</Avatar>
+                    <Chip size="small" label={client.status || "active"} color={statusColor(client.status)} />
+                  </Box>
+                  <Typography variant="h6" gutterBottom>{client.name}</Typography>
+                  {client.company && <Typography variant="body2" color="text.secondary">{client.company}</Typography>}
+                  {client.email && <Typography variant="body2">{client.email}</Typography>}
+                  {client.phone && <Typography variant="body2">{client.phone}</Typography>}
+                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                    <Rating value={client.rating || 0} size="small" readOnly />
+                    <Chip size="small" label={client.industry || "N/A"} sx={{ ml: 1 }} />
+                  </Box>
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                    <Button size="small" onClick={() => openEditClient(client)}>Edit</Button>
+                    <Button size="small" color="error" onClick={() => handleDeleteClient(client.id)}>Delete</Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          )) : (
+            <Grid item xs={12}>
+              <Typography color="text.secondary">No clients found.</Typography>
+            </Grid>
+          )}
         </Grid>
-      </Grid>
+
+        <Dialog open={clientDialogOpen} onClose={() => setClientDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>{editClient ? "Edit Client" : "Add New Client"}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Name *" value={clientForm.name} onChange={e => setClientForm(p => ({ ...p, name: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Company" value={clientForm.company} onChange={e => setClientForm(p => ({ ...p, company: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Email" type="email" value={clientForm.email} onChange={e => setClientForm(p => ({ ...p, email: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Phone" value={clientForm.phone} onChange={e => setClientForm(p => ({ ...p, phone: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select value={clientForm.status} label="Status" onChange={e => setClientForm(p => ({ ...p, status: e.target.value }))}>
+                    <MenuItem value="active">Active</MenuItem>
+                    <MenuItem value="prospect">Prospect</MenuItem>
+                    <MenuItem value="on_hold">On Hold</MenuItem>
+                    <MenuItem value="archived">Archived</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Industry" value={clientForm.industry} onChange={e => setClientForm(p => ({ ...p, industry: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Source" value={clientForm.source} onChange={e => setClientForm(p => ({ ...p, source: e.target.value }))} placeholder="Referral, Cold outreach, etc." /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Tags" value={clientForm.tags} onChange={e => setClientForm(p => ({ ...p, tags: e.target.value }))} placeholder="VIP, Ongoing, etc." /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Budget Min" type="number" value={clientForm.budget_range_min} onChange={e => setClientForm(p => ({ ...p, budget_range_min: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Budget Max" type="number" value={clientForm.budget_range_max} onChange={e => setClientForm(p => ({ ...p, budget_range_max: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Payment Terms</InputLabel>
+                  <Select value={clientForm.payment_terms} label="Payment Terms" onChange={e => setClientForm(p => ({ ...p, payment_terms: e.target.value }))}>
+                    <MenuItem value="net15">Net 15</MenuItem>
+                    <MenuItem value="net30">Net 30</MenuItem>
+                    <MenuItem value="net45">Net 45</MenuItem>
+                    <MenuItem value="net60">Net 60</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Timezone" value={clientForm.timezone} onChange={e => setClientForm(p => ({ ...p, timezone: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Notes" multiline rows={3} value={clientForm.notes} onChange={e => setClientForm(p => ({ ...p, notes: e.target.value }))} /></Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setClientDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleClientSubmit} variant="contained" disabled={submitting === "client"}>
+              {submitting === "client" ? "Saving..." : (editClient ? "Update" : "Create")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Stack>
     );
   }
 
   function renderProjects() {
     return (
       <Stack spacing={3}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} lg={5}>
-            <SectionFrame title="Create Project" subtitle="Every project starts with a mapped client.">
-              <Box component="form" onSubmit={handleProjectSubmit}>
-                <Stack spacing={1.5}>
-                  <TextField
-                    required
-                    label="Project Title"
-                    value={projectForm.title}
-                    onChange={(event) =>
-                      setProjectForm((previous) => ({ ...previous, title: event.target.value }))
-                    }
-                  />
-                  <TextField
-                    label="Description"
-                    multiline
-                    minRows={3}
-                    value={projectForm.description}
-                    onChange={(event) =>
-                      setProjectForm((previous) => ({ ...previous, description: event.target.value }))
-                    }
-                  />
-                  <FormControl fullWidth required>
-                    <InputLabel id="status-select-label">Status</InputLabel>
-                    <Select
-                      labelId="status-select-label"
-                      value={projectForm.status}
-                      label="Status"
-                      onChange={(event) =>
-                        setProjectForm((previous) => ({ ...previous, status: event.target.value }))
-                      }
-                    >
-                      <MenuItem value="active">Active</MenuItem>
-                      <MenuItem value="on_hold">On Hold</MenuItem>
-                      <MenuItem value="completed">Completed</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth required>
-                    <InputLabel id="client-select-label">Client</InputLabel>
-                    <Select
-                      labelId="client-select-label"
-                      value={projectForm.client_id}
-                      label="Client"
-                      onChange={(event) =>
-                        setProjectForm((previous) => ({ ...previous, client_id: event.target.value }))
-                      }
-                    >
-                      {clients.map((client) => (
-                        <MenuItem key={client.id} value={String(client.id)}>
-                          #{client.id} - {client.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <TextField
-                    label="Start Date"
-                    type="date"
-                    value={projectForm.start_date}
-                    InputLabelProps={{ shrink: true }}
-                    onChange={(event) =>
-                      setProjectForm((previous) => ({ ...previous, start_date: event.target.value }))
-                    }
-                  />
-                  <TextField
-                    label="Expected End Date"
-                    type="date"
-                    value={projectForm.expected_end_date}
-                    InputLabelProps={{ shrink: true }}
-                    onChange={(event) =>
-                      setProjectForm((previous) => ({
-                        ...previous,
-                        expected_end_date: event.target.value
-                      }))
-                    }
-                  />
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    startIcon={<WorkspacesRoundedIcon />}
-                    disabled={submitting === "project" || !clients.length}
-                  >
-                    {submitting === "project" ? "Saving..." : "Create Project"}
-                  </Button>
-                </Stack>
-              </Box>
-            </SectionFrame>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5">Projects ({filteredProjects.length})</Typography>
+          <Button variant="contained" startIcon={<WorkspacesRoundedIcon />} onClick={() => { setEditProject(null); setProjectForm(defaultProjectForm); setProjectDialogOpen(true); }} disabled={!clients.length}>
+            New Project
+          </Button>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField fullWidth placeholder="Search projects..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="small" />
           </Grid>
-          <Grid item xs={12} lg={7}>
-            <SectionFrame
-              title="Project Ledger"
-              subtitle="Progress is calculated from phase completion in the backend."
-            >
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Title</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Dates</TableCell>
-                    <TableCell>Progress</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {projects.length ? (
-                    projects.map((project) => (
-                      <TableRow key={project.id} hover>
-                        <TableCell>{project.id}</TableCell>
-                        <TableCell>{project.title}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={project.status || "active"}
-                            size="small"
-                            color={statusColor(project.status)}
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" component="div">
-                            {project.start_date || "n/a"} {" -> "} {project.expected_end_date || "n/a"}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 140 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={project.progress || 0}
-                            sx={{ height: 8, borderRadius: 10, mb: 0.75 }}
-                          />
-                          <Typography variant="caption">{project.progress || 0}%</Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5}>No projects yet.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </SectionFrame>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select value={filterStatus} label="Status" onChange={e => setFilterStatus(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="on_hold">On Hold</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+                <MenuItem value="archived">Archived</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Priority</InputLabel>
+              <Select value={filterPriority} label="Priority" onChange={e => setFilterPriority(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="critical">Critical</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="low">Low</MenuItem>
+              </Select>
+            </FormControl>
           </Grid>
         </Grid>
 
-        <SectionFrame
-          title="Phase Switch"
-          subtitle="Backend exposes phase toggle by phase ID. Enter a phase ID to toggle completion."
-          actions={
-            <Button
-              variant="outlined"
-              onClick={handleTogglePhase}
-              startIcon={<AddTaskRoundedIcon />}
-              disabled={submitting === "phase"}
-            >
-              {submitting === "phase" ? "Updating..." : "Toggle Phase"}
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Project</TableCell>
+              <TableCell>Client</TableCell>
+              <TableCell>Priority</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Budget</TableCell>
+              <TableCell>Timeline</TableCell>
+              <TableCell>Progress</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredProjects.length ? filteredProjects.map(project => (
+              <TableRow key={project.id} hover>
+                <TableCell>
+                  <Typography fontWeight={600}>{project.title}</Typography>
+                  <Stack direction="row" spacing={0.5}>
+                    {project.is_personal && <Chip size="small" label="Personal" />}
+                    {project.is_growth && <Chip size="small" label="Growth" color="secondary" />}
+                  </Stack>
+                </TableCell>
+                <TableCell>#{project.client_id}</TableCell>
+                <TableCell><Chip size="small" label={project.priority || "medium"} color={priorityColor(project.priority)} /></TableCell>
+                <TableCell><Chip size="small" label={project.status || "active"} color={statusColor(project.status)} /></TableCell>
+                <TableCell>{project.budget ? `${project.currency || '$'}${project.budget}` : '-'}</TableCell>
+                <TableCell>
+                  <Typography variant="caption">{project.start_date || "TBD"} → {project.expected_end_date || "TBD"}</Typography>
+                </TableCell>
+                <TableCell sx={{ minWidth: 100 }}>
+                  <LinearProgress variant="determinate" value={project.progress || 0} sx={{ height: 8, borderRadius: 10, mb: 0.5 }} />
+                  <Typography variant="caption">{project.progress || 0}%</Typography>
+                </TableCell>
+                <TableCell>
+                  <Button size="small" onClick={() => openEditProject(project)}>Edit</Button>
+                  <Button size="small" color="error" onClick={() => handleDeleteProject(project.id)}>Delete</Button>
+                </TableCell>
+              </TableRow>
+            )) : (
+              <TableRow><TableCell colSpan={8}>No projects found.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <Dialog open={projectDialogOpen} onClose={() => setProjectDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>{editProject ? "Edit Project" : "Create New Project"}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}><TextField fullWidth label="Project Title *" value={projectForm.title} onChange={e => setProjectForm(p => ({ ...p, title: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Description" multiline rows={3} value={projectForm.description} onChange={e => setProjectForm(p => ({ ...p, description: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Client</InputLabel>
+                  <Select value={projectForm.client_id} label="Client" onChange={e => setProjectForm(p => ({ ...p, client_id: e.target.value }))}>
+                    {clients.map(c => <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select value={projectForm.status} label="Status" onChange={e => setProjectForm(p => ({ ...p, status: e.target.value }))}>
+                    <MenuItem value="active">Active</MenuItem>
+                    <MenuItem value="on_hold">On Hold</MenuItem>
+                    <MenuItem value="completed">Completed</MenuItem>
+                    <MenuItem value="archived">Archived</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Priority</InputLabel>
+                  <Select value={projectForm.priority} label="Priority" onChange={e => setProjectForm(p => ({ ...p, priority: e.target.value }))}>
+                    <MenuItem value="critical">Critical</MenuItem>
+                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="medium">Medium</MenuItem>
+                    <MenuItem value="low">Low</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Billing Type</InputLabel>
+                  <Select value={projectForm.billing_type} label="Billing Type" onChange={e => setProjectForm(p => ({ ...p, billing_type: e.target.value }))}>
+                    <MenuItem value="hourly">Hourly</MenuItem>
+                    <MenuItem value="fixed">Fixed Price</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}><TextField fullWidth label="Budget" type="number" value={projectForm.budget} onChange={e => setProjectForm(p => ({ ...p, budget: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={4}><TextField fullWidth label="Hourly Rate" type="number" value={projectForm.hourly_rate} onChange={e => setProjectForm(p => ({ ...p, hourly_rate: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Currency</InputLabel>
+                  <Select value={projectForm.currency} label="Currency" onChange={e => setProjectForm(p => ({ ...p, currency: e.target.value }))}>
+                    <MenuItem value="USD">USD</MenuItem>
+                    <MenuItem value="EUR">EUR</MenuItem>
+                    <MenuItem value="GBP">GBP</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Start Date" type="date" value={projectForm.start_date} InputLabelProps={{ shrink: true }} onChange={e => setProjectForm(p => ({ ...p, start_date: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Expected End Date" type="date" value={projectForm.expected_end_date} InputLabelProps={{ shrink: true }} onChange={e => setProjectForm(p => ({ ...p, expected_end_date: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Tags" value={projectForm.tags} onChange={e => setProjectForm(p => ({ ...p, tags: e.target.value }))} placeholder="Comma-separated tags" /></Grid>
+              <Grid item xs={12}>
+                <FormControlLabel control={<Switch checked={projectForm.is_personal} onChange={e => setProjectForm(p => ({ ...p, is_personal: e.target.checked }))} />} label="Personal Project" />
+                <FormControlLabel control={<Switch checked={projectForm.is_growth} onChange={e => setProjectForm(p => ({ ...p, is_growth: e.target.checked }))} />} label="Growth Project" />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setProjectDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleProjectSubmit} variant="contained" disabled={submitting === "project" || !projectForm.client_id}>
+              {submitting === "project" ? "Saving..." : (editProject ? "Update" : "Create")}
             </Button>
-          }
-        >
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-            <TextField
-              label="Phase ID"
-              value={phaseIdInput}
-              onChange={(event) => setPhaseIdInput(event.target.value)}
-              sx={{ maxWidth: 260 }}
-            />
-            <Typography variant="body2" color="text.secondary" sx={{ alignSelf: "center" }}>
-              Phase IDs are generated in order when projects are created.
-            </Typography>
-          </Stack>
-        </SectionFrame>
+          </DialogActions>
+        </Dialog>
+      </Stack>
+    );
+  }
+
+  function renderTasks() {
+    return (
+      <Stack spacing={3}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5">Tasks ({filteredTasks.length})</Typography>
+          <Button variant="contained" startIcon={<AddTaskRoundedIcon />} onClick={() => { setTaskForm(defaultTaskForm); setTaskDialogOpen(true); }} disabled={!projects.length}>
+            Add Task
+          </Button>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField fullWidth placeholder="Search tasks..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="small" />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select value={filterStatus} label="Status" onChange={e => setFilterStatus(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="todo">To Do</MenuItem>
+                <MenuItem value="in_progress">In Progress</MenuItem>
+                <MenuItem value="done">Done</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Priority</InputLabel>
+              <Select value={filterPriority} label="Priority" onChange={e => setFilterPriority(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="critical">Critical</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="low">Low</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Task</TableCell>
+              <TableCell>Project</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Priority</TableCell>
+              <TableCell>Due Date</TableCell>
+              <TableCell>Progress</TableCell>
+              <TableCell>Action</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredTasks.length ? filteredTasks.map(task => (
+              <TableRow key={task.id} hover sx={{ bgcolor: task.is_completed ? 'rgba(47,122,74,0.08)' : 'transparent' }}>
+                <TableCell><Typography fontWeight={600}>{task.title}</Typography></TableCell>
+                <TableCell>#{task.project_id}</TableCell>
+                <TableCell><Chip size="small" label={task.status} color={statusColor(task.status)} /></TableCell>
+                <TableCell><Chip size="small" label={task.priority} color={priorityColor(task.priority)} /></TableCell>
+                <TableCell>{task.due_date || '-'}</TableCell>
+                <TableCell sx={{ minWidth: 80 }}>
+                  <LinearProgress variant="determinate" value={task.progress || 0} sx={{ height: 6, borderRadius: 5 }} />
+                </TableCell>
+                <TableCell>
+                  <Button size="small" onClick={() => handleToggleTask(task.id)} disabled={submitting === `task-toggle-${task.id}`}>
+                    {task.is_completed ? "Reopen" : "Complete"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )) : (
+              <TableRow><TableCell colSpan={7}>No tasks found.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <Dialog open={taskDialogOpen} onClose={() => setTaskDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Add New Task</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}><TextField fullWidth label="Task Title *" value={taskForm.title} onChange={e => setTaskForm(p => ({ ...p, title: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Description" multiline rows={2} value={taskForm.description} onChange={e => setTaskForm(p => ({ ...p, description: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Project</InputLabel>
+                  <Select value={selectedProjectId} label="Project" onChange={e => setSelectedProjectId(e.target.value)}>
+                    {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select value={taskForm.status} label="Status" onChange={e => setTaskForm(p => ({ ...p, status: e.target.value }))}>
+                    <MenuItem value="todo">To Do</MenuItem>
+                    <MenuItem value="in_progress">In Progress</MenuItem>
+                    <MenuItem value="done">Done</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Priority</InputLabel>
+                  <Select value={taskForm.priority} label="Priority" onChange={e => setTaskForm(p => ({ ...p, priority: e.target.value }))}>
+                    <MenuItem value="critical">Critical</MenuItem>
+                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="medium">Medium</MenuItem>
+                    <MenuItem value="low">Low</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Due Date" type="date" value={taskForm.due_date} InputLabelProps={{ shrink: true }} onChange={e => setTaskForm(p => ({ ...p, due_date: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Estimated Hours" type="number" value={taskForm.estimated_hours} onChange={e => setTaskForm(p => ({ ...p, estimated_hours: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Tags" value={taskForm.tags} onChange={e => setTaskForm(p => ({ ...p, tags: e.target.value }))} /></Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setTaskDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleTaskSubmit} variant="contained" disabled={submitting === "task"}>
+              {submitting === "task" ? "Saving..." : "Create"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Stack>
+    );
+  }
+
+  function renderMilestones() {
+    const projectMilestones = useMemo(() => {
+      if (!selectedProjectId) return milestones;
+      return milestones.filter(m => m.project_id === Number(selectedProjectId));
+    }, [milestones, selectedProjectId]);
+
+    return (
+      <Stack spacing={3}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5">Milestones</Typography>
+          <Button variant="contained" startIcon={<FlagRoundedIcon />} onClick={() => { setMilestoneForm(defaultMilestoneForm); setMilestoneDialogOpen(true); }} disabled={!projects.length}>
+            Add Milestone
+          </Button>
+        </Box>
+
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel>Filter by Project</InputLabel>
+          <Select value={selectedProjectId} label="Filter by Project" onChange={e => setSelectedProjectId(e.target.value)}>
+            <MenuItem value="">All Projects</MenuItem>
+            {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
+          </Select>
+        </FormControl>
+
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Milestone</TableCell>
+              <TableCell>Project</TableCell>
+              <TableCell>Due Date</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Action</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {projectMilestones.length ? projectMilestones.map(milestone => (
+              <TableRow key={milestone.id} hover sx={{ bgcolor: milestone.is_completed ? 'rgba(47,122,74,0.08)' : 'transparent' }}>
+                <TableCell><Typography fontWeight={600}>{milestone.title}</Typography></TableCell>
+                <TableCell>#{milestone.project_id}</TableCell>
+                <TableCell>{milestone.due_date || '-'}</TableCell>
+                <TableCell><Chip size="small" label={milestone.status} color={statusColor(milestone.status)} /></TableCell>
+                <TableCell>
+                  <Button size="small" onClick={() => handleToggleMilestone(milestone.id)} disabled={submitting === `milestone-toggle-${milestone.id}`}>
+                    {milestone.is_completed ? "Reopen" : "Complete"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )) : (
+              <TableRow><TableCell colSpan={5}>No milestones found.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <Dialog open={milestoneDialogOpen} onClose={() => setMilestoneDialogOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Add Milestone</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Project</InputLabel>
+                  <Select value={selectedProjectId} label="Project" onChange={e => setSelectedProjectId(e.target.value)}>
+                    {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}><TextField fullWidth label="Title *" value={milestoneForm.title} onChange={e => setMilestoneForm(p => ({ ...p, title: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Description" multiline rows={2} value={milestoneForm.description} onChange={e => setMilestoneForm(p => ({ ...p, description: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Due Date" type="date" value={milestoneForm.due_date} InputLabelProps={{ shrink: true }} onChange={e => setMilestoneForm(p => ({ ...p, due_date: e.target.value }))} /></Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setMilestoneDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleMilestoneSubmit} variant="contained" disabled={submitting === "milestone"}>
+              {submitting === "milestone" ? "Saving..." : "Create"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Stack>
+    );
+  }
+
+  function renderBugs() {
+    return (
+      <Stack spacing={3}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5">Bugs ({bugs.length})</Typography>
+          <Button variant="contained" startIcon={<BugReportRoundedIcon />} onClick={() => { setBugForm(defaultBugForm); setBugDialogOpen(true); }} disabled={!projects.length}>
+            Report Bug
+          </Button>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField fullWidth placeholder="Search bugs..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="small" />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select value={filterStatus} label="Status" onChange={e => setFilterStatus(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="open">Open</MenuItem>
+                <MenuItem value="in_progress">In Progress</MenuItem>
+                <MenuItem value="resolved">Resolved</MenuItem>
+                <MenuItem value="closed">Closed</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Severity</InputLabel>
+              <Select value={filterPriority} label="Severity" onChange={e => setFilterPriority(e.target.value)}>
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="critical">Critical</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="low">Low</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Bug</TableCell>
+              <TableCell>Project</TableCell>
+              <TableCell>Severity</TableCell>
+              <TableCell>Priority</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Environment</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {bugs.length ? bugs.map(bug => (
+              <TableRow key={bug.id} hover>
+                <TableCell><Typography fontWeight={600}>{bug.title}</Typography></TableCell>
+                <TableCell>#{bug.project_id}</TableCell>
+                <TableCell><Chip size="small" label={bug.severity} color={severityColor(bug.severity)} /></TableCell>
+                <TableCell><Chip size="small" label={bug.priority} color={priorityColor(bug.priority)} /></TableCell>
+                <TableCell><Chip size="small" label={bug.status} color={statusColor(bug.status)} /></TableCell>
+                <TableCell>{bug.environment || '-'}</TableCell>
+              </TableRow>
+            )) : (
+              <TableRow><TableCell colSpan={6}>No bugs reported.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <Dialog open={bugDialogOpen} onClose={() => setBugDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Report Bug</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Project</InputLabel>
+                  <Select value={selectedProjectId} label="Project" onChange={e => setSelectedProjectId(e.target.value)}>
+                    {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}><TextField fullWidth label="Title *" value={bugForm.title} onChange={e => setBugForm(p => ({ ...p, title: e.target.value }))} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Description" multiline rows={3} value={bugForm.description} onChange={e => setBugForm(p => ({ ...p, description: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Severity</InputLabel>
+                  <Select value={bugForm.severity} label="Severity" onChange={e => setBugForm(p => ({ ...p, severity: e.target.value }))}>
+                    <MenuItem value="critical">Critical</MenuItem>
+                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="medium">Medium</MenuItem>
+                    <MenuItem value="low">Low</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Priority</InputLabel>
+                  <Select value={bugForm.priority} label="Priority" onChange={e => setBugForm(p => ({ ...p, priority: e.target.value }))}>
+                    <MenuItem value="p1">P1 - Critical</MenuItem>
+                    <MenuItem value="p2">P2 - High</MenuItem>
+                    <MenuItem value="p3">P3 - Medium</MenuItem>
+                    <MenuItem value="p4">P4 - Low</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Environment</InputLabel>
+                  <Select value={bugForm.environment} label="Environment" onChange={e => setBugForm(p => ({ ...p, environment: e.target.value }))}>
+                    <MenuItem value="development">Development</MenuItem>
+                    <MenuItem value="staging">Staging</MenuItem>
+                    <MenuItem value="production">Production</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}><TextField fullWidth label="Steps to Reproduce" multiline rows={3} value={bugForm.steps_to_reproduce} onChange={e => setBugForm(p => ({ ...p, steps_to_reproduce: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Expected Behavior" value={bugForm.expected_behavior} onChange={e => setBugForm(p => ({ ...p, expected_behavior: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}><TextField fullWidth label="Actual Behavior" value={bugForm.actual_behavior} onChange={e => setBugForm(p => ({ ...p, actual_behavior: e.target.value }))} /></Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setBugDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBugSubmit} variant="contained" disabled={submitting === "bug"}>
+              {submitting === "bug" ? "Saving..." : "Report Bug"}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Stack>
     );
   }
@@ -683,102 +1365,68 @@ export default function DashboardPage({ token, email, onLogout }) {
     return (
       <Grid container spacing={3}>
         <Grid item xs={12} lg={5}>
-          <SectionFrame title="Create Call Task" subtitle="Capture every follow-up before it slips.">
+          <SectionFrame title="Schedule Call" subtitle="Plan a call or follow-up.">
             <Box component="form" onSubmit={handleCallSubmit}>
               <Stack spacing={1.5}>
                 <FormControl fullWidth required>
-                  <InputLabel id="project-call-select-label">Project</InputLabel>
-                  <Select
-                    labelId="project-call-select-label"
-                    value={selectedProjectId}
-                    label="Project"
-                    onChange={(event) => setSelectedProjectId(event.target.value)}
-                  >
-                    {projects.map((project) => (
-                      <MenuItem key={project.id} value={String(project.id)}>
-                        #{project.id} - {project.title}
-                      </MenuItem>
-                    ))}
+                  <InputLabel>Project</InputLabel>
+                  <Select value={selectedProjectId} label="Project" onChange={e => setSelectedProjectId(e.target.value)}>
+                    {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
                   </Select>
                 </FormControl>
-                <TextField
-                  required
-                  label="Call Title"
-                  value={callForm.title}
-                  onChange={(event) =>
-                    setCallForm((previous) => ({ ...previous, title: event.target.value }))
-                  }
-                />
-                <TextField
-                  label="Notes"
-                  multiline
-                  minRows={3}
-                  value={callForm.notes}
-                  onChange={(event) =>
-                    setCallForm((previous) => ({ ...previous, notes: event.target.value }))
-                  }
-                />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={<CallRoundedIcon />}
-                  disabled={submitting === "call" || !selectedProjectId}
-                >
-                  {submitting === "call" ? "Saving..." : "Create Call"}
+                <TextField required fullWidth label="Call Title" value={callForm.title} onChange={e => setCallForm(p => ({ ...p, title: e.target.value }))} />
+                <TextField fullWidth label="Notes" multiline rows={3} value={callForm.notes} onChange={e => setCallForm(p => ({ ...p, notes: e.target.value }))} />
+                <Grid container spacing={2}>
+                  <Grid item xs={6}><TextField fullWidth label="Scheduled At" type="datetime-local" value={callForm.scheduled_at} InputLabelProps={{ shrink: true }} onChange={e => setCallForm(p => ({ ...p, scheduled_at: e.target.value }))} /></Grid>
+                  <Grid item xs={6}><TextField fullWidth label="Duration (min)" type="number" value={callForm.duration} onChange={e => setCallForm(p => ({ ...p, duration: e.target.value }))} /></Grid>
+                </Grid>
+                <FormControl fullWidth>
+                  <InputLabel>Call Type</InputLabel>
+                  <Select value={callForm.call_type} label="Call Type" onChange={e => setCallForm(p => ({ ...p, call_type: e.target.value }))}>
+                    <MenuItem value="general">General</MenuItem>
+                    <MenuItem value="discovery">Discovery</MenuItem>
+                    <MenuItem value="follow_up">Follow-up</MenuItem>
+                    <MenuItem value="retro">Retrospective</MenuItem>
+                    <MenuItem value="standup">Standup</MenuItem>
+                  </Select>
+                </FormControl>
+                <Button type="submit" variant="contained" startIcon={<CallRoundedIcon />} disabled={submitting === "call" || !selectedProjectId}>
+                  {submitting === "call" ? "Saving..." : "Schedule Call"}
                 </Button>
               </Stack>
             </Box>
           </SectionFrame>
         </Grid>
         <Grid item xs={12} lg={7}>
-          <SectionFrame
-            title="Call Queue"
-            subtitle={
-              selectedProjectId
-                ? `Project #${selectedProjectId} call list`
-                : "Select a project to view call list"
-            }
-          >
+          <SectionFrame title="Call Queue" subtitle={selectedProjectId ? `Project #${selectedProjectId} calls` : "Select a project"}>
+            <FormControl sx={{ mb: 2, minWidth: 200 }}>
+              <InputLabel>Filter by Project</InputLabel>
+              <Select value={selectedProjectId} label="Filter by Project" onChange={e => setSelectedProjectId(e.target.value)}>
+                <MenuItem value="">All Projects</MenuItem>
+                {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
+              </Select>
+            </FormControl>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>ID</TableCell>
                   <TableCell>Title</TableCell>
-                  <TableCell>Notes</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Scheduled</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {selectedProjectCalls.length ? (
-                  selectedProjectCalls.map((callItem) => (
-                    <TableRow key={callItem.id} hover>
-                      <TableCell>{callItem.id}</TableCell>
-                      <TableCell>{callItem.title}</TableCell>
-                      <TableCell>{callItem.notes || "-"}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={callItem.completed ? "success" : "warning"}
-                          label={callItem.completed ? "Completed" : "Pending"}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => handleToggleCall(callItem.id)}
-                          disabled={submitting === `call-toggle-${callItem.id}`}
-                        >
-                          {submitting === `call-toggle-${callItem.id}` ? "..." : "Toggle"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5}>No calls yet for this project.</TableCell>
+                {selectedProjectCalls.length ? selectedProjectCalls.map(call => (
+                  <TableRow key={call.id} hover>
+                    <TableCell><Typography fontWeight={600}>{call.title}</Typography></TableCell>
+                    <TableCell>{call.call_type}</TableCell>
+                    <TableCell>{call.scheduled_at ? new Date(call.scheduled_at).toLocaleString() : '-'}</TableCell>
+                    <TableCell><Chip size="small" color={call.completed ? "success" : "warning"} label={call.completed ? "Completed" : "Pending"} /></TableCell>
+                    <TableCell><Button size="small" onClick={() => handleToggleCall(call.id)} disabled={submitting === `call-toggle-${call.id}`}>Toggle</Button></TableCell>
                   </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={5}>No calls for this project.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -789,60 +1437,31 @@ export default function DashboardPage({ token, email, onLogout }) {
   }
 
   function renderBody() {
-    if (section === "clients") {
-      return renderClients();
+    switch (section) {
+      case "clients": return renderClients();
+      case "projects": return renderProjects();
+      case "tasks": return renderTasks();
+      case "milestones": return renderMilestones();
+      case "bugs": return renderBugs();
+      case "calls": return renderCalls();
+      default: return renderOverview();
     }
-    if (section === "projects") {
-      return renderProjects();
-    }
-    if (section === "calls") {
-      return renderCalls();
-    }
-    return renderOverview();
   }
 
   return (
-    <AppShell
-      sections={sectionConfig}
-      activeSection={section}
-      onSectionChange={setSection}
-      title="Freelance CRM"
-      subtitle="Command Deck"
-      userEmail={email}
-      onLogout={onLogout}
-    >
+    <AppShell sections={sectionConfig} activeSection={section} onSectionChange={setSection} title="Freelance CRM" subtitle="Mega-App Command Deck" userEmail={email} onLogout={onLogout}>
       <Stack spacing={3}>
-        <Box
-          sx={{
-            p: { xs: 2, md: 3 },
-            borderRadius: 3,
-            border: "1px solid rgba(25,22,17,0.12)",
-            background:
-              "linear-gradient(120deg, rgba(21,94,99,0.14) 0%, rgba(180,73,21,0.12) 55%, rgba(251,248,239,1) 100%)"
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={2}
-            alignItems={{ xs: "flex-start", md: "center" }}
-            justifyContent="space-between"
-          >
+        <Box sx={{ p: { xs: 2, md: 3 }, borderRadius: 3, border: "1px solid rgba(25,22,17,0.12)", background: "linear-gradient(120deg, rgba(21,94,99,0.14) 0%, rgba(180,73,21,0.12) 55%, rgba(251,248,239,1) 100%)" }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between">
             <Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontFamily: "'IBM Plex Mono', monospace" }}
-              >
-                OPERATIONS SNAPSHOT
-              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "'IBM Plex Mono', monospace" }}>OPERATIONS SNAPSHOT</Typography>
               <Typography variant="h3">Freelance Control Room</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Keep every client engagement and project milestone visible.
-              </Typography>
+              <Typography variant="body2" color="text.secondary">Your mega-app for clients, projects, tasks, bugs, and more.</Typography>
             </Box>
             <Stack direction="row" spacing={1}>
               <Chip icon={<InsightsRoundedIcon />} label={`${metrics.projectCount} projects`} />
-              <Chip icon={<CallRoundedIcon />} label={`${metrics.openCalls} open calls`} />
+              <Chip icon={<CallRoundedIcon />} label={`${metrics.openCalls} calls`} />
+              <Chip icon={<BugReportRoundedIcon />} label={`${metrics.openBugs} bugs`} />
             </Stack>
           </Stack>
         </Box>
@@ -859,16 +1478,8 @@ export default function DashboardPage({ token, email, onLogout }) {
         {renderBody()}
       </Stack>
 
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={2600}
-        onClose={() => setSnack((previous) => ({ ...previous, open: false }))}
-      >
-        <Alert
-          variant="filled"
-          severity={snack.severity}
-          onClose={() => setSnack((previous) => ({ ...previous, open: false }))}
-        >
+      <Snackbar open={snack.open} autoHideDuration={2600} onClose={() => setSnack(p => ({ ...p, open: false }))}>
+        <Alert variant="filled" severity={snack.severity} onClose={() => setSnack(p => ({ ...p, open: false }))}>
           {snack.message}
         </Alert>
       </Snackbar>

@@ -8,9 +8,9 @@ from app.api import client_routes, project_routes, call_routes
 
 # Create FastAPI application instance
 app = FastAPI(
-    title="Freelance CRM API",
-    description="Backend API for managing clients, projects and progress",
-    version="1.0.0"
+    title="Freelance CRM Mega-App API",
+    description="Ultimate productivity app for freelancers - Clients, Projects, Tasks, Bugs, Sprints, Calendar, and more",
+    version="2.0.0"
 )
 
 raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
@@ -38,4 +38,4 @@ def root():
     Health check endpoint.
     This helps us confirm the backend is running correctly.
     """
-    return {"message": "Freelance CRM API is running this means the backednd of this  app is fully functional. Copyright Insuarance claims software by Pete"}
+    return {"message": "Freelance CRM Mega-App API v2.0 is running. Your ultimate productivity hub!"}

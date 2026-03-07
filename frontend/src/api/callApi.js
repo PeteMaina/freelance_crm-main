@@ -18,3 +18,11 @@ export function toggleCall(callId, token) {
     token
   });
 }
+
+export function getUpcomingCalls(token) {
+  return request("/calls/upcoming", { token });
+}
+
+export function getOverdueCalls(token) {
+  return request("/calls/overdue", { token });
+}
