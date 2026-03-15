@@ -1,4 +1,4 @@
-# Freelance CRM Frontend
+# ACTIVA Frontend
 
 React + MUI frontend for the FastAPI backend in this repository.
 

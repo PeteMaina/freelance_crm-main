@@ -1,5 +1,11 @@
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import PersonAddRoundedIcon from "@mui/icons-material/PersonAddRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
+import brandLogo from "../logo/brand_logo.png";
+import faviconLogo from "../logo/favicon_logo.png";
 import {
   Alert,
   Box,
@@ -7,6 +13,7 @@ import {
   CircularProgress,
   Container,
   Grid,
+  IconButton,
   Paper,
   Stack,
   Tab,
@@ -29,6 +36,9 @@ export default function AuthPage() {
   const [fields, setFields] = useState(defaultFields);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [authSuccess, setAuthSuccess] = useState(false);
 
   const submitLabel = useMemo(() => {
     return mode === "login" ? "Sign In" : "Create Account";
@@ -43,9 +53,18 @@ export default function AuthPage() {
       if (mode === "login") {
         await login(fields);
       } else {
+        if (!acceptedTerms) {
+          setError("You must accept the terms and conditions.");
+          setBusy(false);
+          return;
+        }
         await register(fields);
       }
+      setAuthSuccess(true);
       setFields(defaultFields);
+      // Brief delay to show animation before redirect (login function usually redirects, 
+      // but if it's external, we might need a signal or just wait if logic allows.
+      // Assuming login/register from context updates state which causes parent to show dashboard.
     } catch (submitError) {
       setError(submitError.message || "Authentication failed.");
     } finally {
@@ -69,18 +88,15 @@ export default function AuthPage() {
             }}
           >
             <Box>
-              <Typography
-                variant="caption"
-                sx={{ fontFamily: "'IBM Plex Mono', monospace" }}
-              >
-                FREELANCE CRM
-              </Typography>
+              <Box sx={{ mb: 2 }}>
+                <img src={brandLogo} alt="ACTIVA Logo" style={{ height: 48 }} />
+              </Box>
               <Typography variant="h1" sx={{ mt: 1.5, maxWidth: 520 }}>
                 Run every client like a deliberate operation.
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mt: 3 }}>
-                This workspace tracks clients, project momentum, and call follow-ups in one command deck.
-                Connect to your backend at <strong>{API_BASE_URL}</strong> and operate with real data.
+                This operations hub tracks clients, project momentum, and roadmap milestones in one high-performance deck.
+
               </Typography>
             </Box>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -97,7 +113,7 @@ export default function AuthPage() {
                 <Typography variant="caption" color="text.secondary">
                   Workflow Signal
                 </Typography>
-                <Typography variant="h4">Execution cadence</Typography>
+                <Typography variant="h4">Execution Excellence</Typography>
                 <Typography variant="body2" color="text.secondary">
                   Monitor project progress percentages and intervene early.
                 </Typography>
@@ -155,17 +171,41 @@ export default function AuthPage() {
                 <TextField
                   required
                   label="Password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={fields.password}
                   onChange={(event) =>
                     setFields((prev) => ({ ...prev, password: event.target.value }))
                   }
+                  InputProps={{
+                    endAdornment: (
+                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                        {showPassword ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
+                      </IconButton>
+                    )
+                  }}
                 />
+                {mode === "register" && (
+                  <FormControlLabel
+                    control={
+                      <Checkbox 
+                        checked={acceptedTerms} 
+                        onChange={(e) => setAcceptedTerms(e.target.checked)} 
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2">
+                        I agree to the <Box component="span" sx={{ color: 'primary.main', cursor: 'pointer', textDecoration: 'underline' }}>Terms & Conditions</Box> and <Box component="span" sx={{ color: 'primary.main', cursor: 'pointer', textDecoration: 'underline' }}>Privacy Policy</Box>
+                      </Typography>
+                    }
+                    sx={{ mb: 1 }}
+                  />
+                )}
                 <Button
                   type="submit"
                   variant="contained"
                   size="large"
-                  disabled={busy}
+                  disabled={busy || (mode === "register" && !acceptedTerms)}
                   startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
                 >
                   {submitLabel}
@@ -175,6 +215,30 @@ export default function AuthPage() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Auth Success Animation Overlay */}
+      {authSuccess && (
+        <Box 
+          sx={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            width: '100%', 
+            height: '100%', 
+            bgcolor: 'rgba(251, 248, 239, 0.95)', 
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(10px)'
+          }}
+        >
+          <Box className="zoom-pulse" sx={{ textAlign: 'center' }}>
+            <img src={faviconLogo} alt="Success" style={{ width: 120, height: 120 }} />
+            <Typography variant="h3" sx={{ mt: 3, color: '#8b9b75' }}>Operations Online</Typography>
+          </Box>
+        </Box>
+      )}
     </Container>
   );
 }

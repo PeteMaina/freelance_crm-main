@@ -54,19 +54,21 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { createCall, listCalls, toggleCall, getUpcomingCalls, getOverdueCalls } from "../api/callApi";
 import { createClient, listClients, updateClient, deleteClient, getClientMetrics, searchClients, createContact, listContacts } from "../api/clientApi";
-import { createProject, listProjects, togglePhase, createTask, listTasks, toggleTask, createMilestone, listMilestones, toggleMilestone, createBug, listBugs, updateProject, updateTask, deleteProject } from "../api/projectApi";
+import { createProject, listProjects, togglePhase, createTask, listTasks, listAllTasks, toggleTask, createMilestone, listMilestones, listAllMilestones, toggleMilestone, createBug, listBugs, listAllBugs, updateProject, updateTask, deleteProject } from "../api/projectApi";
 import AppShell from "../components/AppShell";
 import KpiCard from "../components/KpiCard";
 import SectionFrame from "../components/SectionFrame";
+import DatePickerField from "../components/DatePickerField";
+import ProgressEditor from "../components/ProgressEditor";
 
 const sectionConfig = [
-  { key: "overview", label: "Overview", hint: "Live health indicators" },
-  { key: "clients", label: "Clients", hint: "Client intake and management" },
-  { key: "projects", label: "Projects", hint: "Execution and progress" },
-  { key: "tasks", label: "Tasks", hint: "Task management" },
-  { key: "milestones", label: "Milestones", hint: "Project milestones" },
-  { key: "bugs", label: "Bugs", hint: "Bug tracking" },
-  { key: "calls", label: "Calls", hint: "Follow-ups and cadence" }
+  { key: "overview", label: "Overview", hint: "Health indicators" },
+  { key: "clients", label: "Clients", hint: "Relationship management" },
+  { key: "projects", label: "Projects", hint: "Execution deck" },
+  { key: "tasks", label: "Tasks", hint: "Daily work" },
+  { key: "milestones", label: "Milestones", hint: "Roadmap hits" },
+  { key: "bugs", label: "Bugs", hint: "Stability tracking" },
+  { key: "calls", label: "Calls", hint: "Client cadence" }
 ];
 
 const defaultClientForm = {
@@ -88,6 +90,8 @@ const defaultClientForm = {
   payment_terms: "net30"
 };
 
+const todayISO = () => new Date().toISOString().split("T")[0];
+
 const defaultProjectForm = {
   title: "",
   description: "",
@@ -99,9 +103,9 @@ const defaultProjectForm = {
   is_growth: false,
   budget: "",
   hourly_rate: "",
-  currency: "USD",
+  currency: "KSH",
   billing_type: "hourly",
-  start_date: "",
+  start_date: todayISO(),
   expected_end_date: "",
   client_id: ""
 };
@@ -202,6 +206,8 @@ export default function DashboardPage({ token, email, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [viewingClientDetail, setViewingClientDetail] = useState(false);
 
   // Dialog states
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
@@ -223,8 +229,8 @@ export default function DashboardPage({ token, email, onLogout }) {
     let result = clients;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(c => 
-        c.name?.toLowerCase().includes(query) || 
+      result = result.filter(c =>
+        c.name?.toLowerCase().includes(query) ||
         c.email?.toLowerCase().includes(query) ||
         c.company?.toLowerCase().includes(query)
       );
@@ -249,6 +255,11 @@ export default function DashboardPage({ token, email, onLogout }) {
     }
     return result;
   }, [projects, searchQuery, filterStatus, filterPriority]);
+
+  const projectMilestones = useMemo(() => {
+    if (!selectedProjectId) return milestones;
+    return milestones.filter(m => m.project_id === Number(selectedProjectId));
+  }, [milestones, selectedProjectId]);
 
   const filteredTasks = useMemo(() => {
     let result = tasks;
@@ -311,34 +322,41 @@ export default function DashboardPage({ token, email, onLogout }) {
     setLoading(true);
     setError("");
     try {
+      const fetchWithCatch = async (fn, name) => {
+        try {
+          return await fn;
+        } catch (e) {
+          console.error(`Hydrate failed for ${name}:`, e);
+          return null; // Return null so we can handle it
+        }
+      };
+
       const [clientData, projectData, allTasksData, allMilestonesData, allBugsData, allCallsData] = await Promise.all([
-        listClients(token),
-        listProjects(token),
-        listAllTasks(token),
-        listAllMilestones(token),
-        listAllBugs(token),
-        listCalls(token)
+        fetchWithCatch(listClients(token), "clients"),
+        fetchWithCatch(listProjects(token), "projects"),
+        fetchWithCatch(listAllTasks(token), "tasks"),
+        fetchWithCatch(listAllMilestones(token), "milestones"),
+        fetchWithCatch(listAllBugs(token), "bugs"),
+        fetchWithCatch(listCalls(token), "calls")
       ]);
 
-      const safeClients = clientData || [];
+      setClients(clientData || []);
+      setProjects(projectData || []);
+      setTasks(allTasksData || []);
+      setMilestones(allMilestonesData || []);
+      setBugs(allBugsData || []);
+      setAllCalls(allCallsData || []);
+
+      if (clientData === null || projectData === null) {
+        setError("Warning: Some data could not be fetched. Check connectivity to backend.");
+      }
+
       const safeProjects = projectData || [];
-      const safeTasks = allTasksData || [];
-      const safeMilestones = allMilestonesData || [];
-      const safeBugs = allBugsData || [];
-      const safeCalls = allCallsData || [];
-
-      setClients(safeClients);
-      setProjects(safeProjects);
-      setTasks(safeTasks);
-      setMilestones(safeMilestones);
-      setBugs(safeBugs);
-      setAllCalls(safeCalls);
-
       const callsMap = {};
       await Promise.all(
         safeProjects.map(async (project) => {
           try {
-            const callData = await listCalls(project.id, token);
+            const callData = await listCalls(token, project.id);
             callsMap[String(project.id)] = callData || [];
           } catch (innerError) {
             callsMap[String(project.id)] = [];
@@ -425,17 +443,18 @@ export default function DashboardPage({ token, email, onLogout }) {
     try {
       const projectData = {
         ...projectForm,
-        client_id: Number(projectForm.client_id),
+        client_id: projectForm.client_id ? Number(projectForm.client_id) : null,
         budget: projectForm.budget ? Number(projectForm.budget) : null,
-        hourly_rate: projectForm.hourly_rate ? Number(projectForm.hourly_rate) : null
+        hourly_rate: projectForm.hourly_rate ? Number(projectForm.hourly_rate) : null,
+        start_date: projectForm.start_date || todayISO()
       };
-      
+
       if (editProject) {
         await updateProject(editProject.id, projectData, token);
         notify("Project updated.");
       } else {
         await createProject(projectData, token);
-        notify("Project created.");
+        notify("Project created successfully!");
       }
       setProjectForm(defaultProjectForm);
       setEditProject(null);
@@ -496,17 +515,31 @@ export default function DashboardPage({ token, email, onLogout }) {
       const taskData = {
         ...taskForm,
         project_id: Number(selectedProjectId),
-        estimated_hours: taskForm.estimated_hours ? Number(taskForm.estimated_hours) : null
+        estimated_hours: taskForm.estimated_hours ? Number(taskForm.estimated_hours) : null,
+        due_date: taskForm.due_date || null,
+        start_date: taskForm.start_date || null,
+        assignee: taskForm.assignee || null,
+        tags: taskForm.tags || null
       };
       await createTask(selectedProjectId, taskData, token);
       setTaskForm(defaultTaskForm);
       setTaskDialogOpen(false);
-      notify("Task created.");
+      notify("Task created successfully!");
       await hydrate();
     } catch (submitError) {
       notify(submitError.message || "Could not create task.", "error");
     } finally {
       setSubmitting("");
+    }
+  }
+
+  async function handleProgressUpdate(projectId, newProgress) {
+    try {
+      await updateProject(projectId, { progress: newProgress }, token);
+      notify("Progress updated.");
+      await hydrate();
+    } catch (err) {
+      notify(err.message || "Could not update progress.", "error");
     }
   }
 
@@ -532,10 +565,15 @@ export default function DashboardPage({ token, email, onLogout }) {
     }
     setSubmitting("milestone");
     try {
-      await createMilestone(selectedProjectId, milestoneForm, token);
+      const milestoneData = {
+        ...milestoneForm,
+        project_id: Number(selectedProjectId),
+        due_date: milestoneForm.due_date || null
+      };
+      await createMilestone(selectedProjectId, milestoneData, token);
       setMilestoneForm(defaultMilestoneForm);
       setMilestoneDialogOpen(false);
-      notify("Milestone created.");
+      notify("Milestone created successfully!");
       await hydrate();
     } catch (submitError) {
       notify(submitError.message || "Could not create milestone.", "error");
@@ -566,10 +604,14 @@ export default function DashboardPage({ token, email, onLogout }) {
     }
     setSubmitting("bug");
     try {
-      await createBug(selectedProjectId, bugForm, token);
+      const bugData = {
+        ...bugForm,
+        project_id: Number(selectedProjectId)
+      };
+      await createBug(selectedProjectId, bugData, token);
       setBugForm(defaultBugForm);
       setBugDialogOpen(false);
-      notify("Bug reported.");
+      notify("Bug reported successfully!");
       await hydrate();
     } catch (submitError) {
       notify(submitError.message || "Could not create bug.", "error");
@@ -589,11 +631,13 @@ export default function DashboardPage({ token, email, onLogout }) {
     try {
       const callData = {
         ...callForm,
-        project_id: Number(selectedProjectId)
+        project_id: Number(selectedProjectId),
+        scheduled_at: callForm.scheduled_at || null,
+        duration: callForm.duration ? Number(callForm.duration) : null
       };
       await createCall(callData, token);
       setCallForm(defaultCallForm);
-      notify("Call task saved.");
+      notify("Call scheduled successfully!");
       await hydrate();
     } catch (submitError) {
       notify(submitError.message || "Could not save call.", "error");
@@ -619,7 +663,7 @@ export default function DashboardPage({ token, email, onLogout }) {
   function renderOverview() {
     return (
       <Stack spacing={3}>
-        <SectionFrame title="Command Pulse" subtitle="A live snapshot of your freelance operation.">
+        <SectionFrame title="ACTIVA Pulse" subtitle="A live snapshot of your operations.">
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={3}>
               <KpiCard label="Total Clients" value={metrics.clientCount} hint="Accounts in your CRM" tone="sea" />
@@ -680,8 +724,12 @@ export default function DashboardPage({ token, email, onLogout }) {
                           <Chip size="small" label={project.status || "active"} color={statusColor(project.status)} variant="outlined" />
                         </TableCell>
                         <TableCell sx={{ minWidth: 120 }}>
-                          <LinearProgress variant="determinate" value={project.progress || 0} sx={{ height: 8, borderRadius: 10, mb: 0.5 }} />
-                          <Typography variant="caption">{project.progress || 0}%</Typography>
+                          <ProgressEditor
+                            compact
+                            autoProgress={project.tasks?.length ? Math.round((project.tasks.filter(t => t.is_completed).length / project.tasks.length) * 100) : 0}
+                            manualProgress={project.progress || 0}
+                            hasActiveTasks={!!project.tasks?.length}
+                          />
                         </TableCell>
                       </TableRow>
                     ))
@@ -801,7 +849,8 @@ export default function DashboardPage({ token, email, onLogout }) {
                     <Rating value={client.rating || 0} size="small" readOnly />
                     <Chip size="small" label={client.industry || "N/A"} sx={{ ml: 1 }} />
                   </Box>
-                  <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: "wrap" }}>
+                    <Button size="small" variant="outlined" onClick={() => { setSelectedClient(client); setViewingClientDetail(true); }}>View Details</Button>
                     <Button size="small" onClick={() => openEditClient(client)}>Edit</Button>
                     <Button size="small" color="error" onClick={() => handleDeleteClient(client.id)}>Delete</Button>
                   </Box>
@@ -870,7 +919,7 @@ export default function DashboardPage({ token, email, onLogout }) {
       <Stack spacing={3}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h5">Projects ({filteredProjects.length})</Typography>
-          <Button variant="contained" startIcon={<WorkspacesRoundedIcon />} onClick={() => { setEditProject(null); setProjectForm(defaultProjectForm); setProjectDialogOpen(true); }} disabled={!clients.length}>
+          <Button variant="contained" startIcon={<WorkspacesRoundedIcon />} onClick={() => { setEditProject(null); setProjectForm(defaultProjectForm); setProjectDialogOpen(true); }}>
             New Project
           </Button>
         </Box>
@@ -928,16 +977,21 @@ export default function DashboardPage({ token, email, onLogout }) {
                     {project.is_growth && <Chip size="small" label="Growth" color="secondary" />}
                   </Stack>
                 </TableCell>
-                <TableCell>#{project.client_id}</TableCell>
+                <TableCell>{project.client_id ? (clients.find(c => c.id === project.client_id)?.name || `#${project.client_id}`) : <Chip size="small" label="Unassigned" variant="outlined" />}</TableCell>
                 <TableCell><Chip size="small" label={project.priority || "medium"} color={priorityColor(project.priority)} /></TableCell>
                 <TableCell><Chip size="small" label={project.status || "active"} color={statusColor(project.status)} /></TableCell>
                 <TableCell>{project.budget ? `${project.currency || '$'}${project.budget}` : '-'}</TableCell>
                 <TableCell>
                   <Typography variant="caption">{project.start_date || "TBD"} → {project.expected_end_date || "TBD"}</Typography>
                 </TableCell>
-                <TableCell sx={{ minWidth: 100 }}>
-                  <LinearProgress variant="determinate" value={project.progress || 0} sx={{ height: 8, borderRadius: 10, mb: 0.5 }} />
-                  <Typography variant="caption">{project.progress || 0}%</Typography>
+                <TableCell sx={{ minWidth: 120 }}>
+                  <ProgressEditor
+                    compact
+                    autoProgress={tasks.filter(t => t.project_id === project.id).length ? Math.round((tasks.filter(t => t.project_id === project.id && t.is_completed).length / tasks.filter(t => t.project_id === project.id).length) * 100) : 0}
+                    manualProgress={project.progress || 0}
+                    hasActiveTasks={tasks.some(t => t.project_id === project.id)}
+                    onSave={(v) => handleProgressUpdate(project.id, v)}
+                  />
                 </TableCell>
                 <TableCell>
                   <Button size="small" onClick={() => openEditProject(project)}>Edit</Button>
@@ -957,9 +1011,10 @@ export default function DashboardPage({ token, email, onLogout }) {
               <Grid item xs={12}><TextField fullWidth label="Project Title *" value={projectForm.title} onChange={e => setProjectForm(p => ({ ...p, title: e.target.value }))} /></Grid>
               <Grid item xs={12}><TextField fullWidth label="Description" multiline rows={3} value={projectForm.description} onChange={e => setProjectForm(p => ({ ...p, description: e.target.value }))} /></Grid>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Client</InputLabel>
-                  <Select value={projectForm.client_id} label="Client" onChange={e => setProjectForm(p => ({ ...p, client_id: e.target.value }))}>
+                <FormControl fullWidth>
+                  <InputLabel>Client (optional)</InputLabel>
+                  <Select value={projectForm.client_id} label="Client (optional)" onChange={e => setProjectForm(p => ({ ...p, client_id: e.target.value }))}>
+                    <MenuItem value=""><em>No Client — assign later</em></MenuItem>
                     {clients.map(c => <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>)}
                   </Select>
                 </FormControl>
@@ -1001,14 +1056,19 @@ export default function DashboardPage({ token, email, onLogout }) {
                 <FormControl fullWidth>
                   <InputLabel>Currency</InputLabel>
                   <Select value={projectForm.currency} label="Currency" onChange={e => setProjectForm(p => ({ ...p, currency: e.target.value }))}>
+                    <MenuItem value="KSH">KSH (Kenyan Shilling)</MenuItem>
                     <MenuItem value="USD">USD</MenuItem>
                     <MenuItem value="EUR">EUR</MenuItem>
                     <MenuItem value="GBP">GBP</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Start Date" type="date" value={projectForm.start_date} InputLabelProps={{ shrink: true }} onChange={e => setProjectForm(p => ({ ...p, start_date: e.target.value }))} /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Expected End Date" type="date" value={projectForm.expected_end_date} InputLabelProps={{ shrink: true }} onChange={e => setProjectForm(p => ({ ...p, expected_end_date: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}>
+                <DatePickerField label="Start Date" value={projectForm.start_date} onChange={v => setProjectForm(p => ({ ...p, start_date: v }))} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <DatePickerField label="Expected End Date" value={projectForm.expected_end_date} onChange={v => setProjectForm(p => ({ ...p, expected_end_date: v }))} />
+              </Grid>
               <Grid item xs={12}><TextField fullWidth label="Tags" value={projectForm.tags} onChange={e => setProjectForm(p => ({ ...p, tags: e.target.value }))} placeholder="Comma-separated tags" /></Grid>
               <Grid item xs={12}>
                 <FormControlLabel control={<Switch checked={projectForm.is_personal} onChange={e => setProjectForm(p => ({ ...p, is_personal: e.target.checked }))} />} label="Personal Project" />
@@ -1018,7 +1078,7 @@ export default function DashboardPage({ token, email, onLogout }) {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setProjectDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleProjectSubmit} variant="contained" disabled={submitting === "project" || !projectForm.client_id}>
+            <Button onClick={handleProjectSubmit} variant="contained" disabled={submitting === "project" || !projectForm.title.trim()}>
               {submitting === "project" ? "Saving..." : (editProject ? "Update" : "Create")}
             </Button>
           </DialogActions>
@@ -1136,7 +1196,9 @@ export default function DashboardPage({ token, email, onLogout }) {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Due Date" type="date" value={taskForm.due_date} InputLabelProps={{ shrink: true }} onChange={e => setTaskForm(p => ({ ...p, due_date: e.target.value }))} /></Grid>
+              <Grid item xs={12} sm={6}>
+                <DatePickerField label="Due Date" value={taskForm.due_date} onChange={v => setTaskForm(p => ({ ...p, due_date: v }))} />
+              </Grid>
               <Grid item xs={12} sm={6}><TextField fullWidth label="Estimated Hours" type="number" value={taskForm.estimated_hours} onChange={e => setTaskForm(p => ({ ...p, estimated_hours: e.target.value }))} /></Grid>
               <Grid item xs={12}><TextField fullWidth label="Tags" value={taskForm.tags} onChange={e => setTaskForm(p => ({ ...p, tags: e.target.value }))} /></Grid>
             </Grid>
@@ -1153,11 +1215,6 @@ export default function DashboardPage({ token, email, onLogout }) {
   }
 
   function renderMilestones() {
-    const projectMilestones = useMemo(() => {
-      if (!selectedProjectId) return milestones;
-      return milestones.filter(m => m.project_id === Number(selectedProjectId));
-    }, [milestones, selectedProjectId]);
-
     return (
       <Stack spacing={3}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1189,7 +1246,7 @@ export default function DashboardPage({ token, email, onLogout }) {
             {projectMilestones.length ? projectMilestones.map(milestone => (
               <TableRow key={milestone.id} hover sx={{ bgcolor: milestone.is_completed ? 'rgba(47,122,74,0.08)' : 'transparent' }}>
                 <TableCell><Typography fontWeight={600}>{milestone.title}</Typography></TableCell>
-                <TableCell>#{milestone.project_id}</TableCell>
+                <TableCell>{projects.find(p => p.id === milestone.project_id)?.title || milestone.project_id}</TableCell>
                 <TableCell>{milestone.due_date || '-'}</TableCell>
                 <TableCell><Chip size="small" label={milestone.status} color={statusColor(milestone.status)} /></TableCell>
                 <TableCell>
@@ -1218,7 +1275,9 @@ export default function DashboardPage({ token, email, onLogout }) {
               </Grid>
               <Grid item xs={12}><TextField fullWidth label="Title *" value={milestoneForm.title} onChange={e => setMilestoneForm(p => ({ ...p, title: e.target.value }))} /></Grid>
               <Grid item xs={12}><TextField fullWidth label="Description" multiline rows={2} value={milestoneForm.description} onChange={e => setMilestoneForm(p => ({ ...p, description: e.target.value }))} /></Grid>
-              <Grid item xs={12}><TextField fullWidth label="Due Date" type="date" value={milestoneForm.due_date} InputLabelProps={{ shrink: true }} onChange={e => setMilestoneForm(p => ({ ...p, due_date: e.target.value }))} /></Grid>
+              <Grid item xs={12}>
+                <DatePickerField label="Due Date" value={milestoneForm.due_date} onChange={v => setMilestoneForm(p => ({ ...p, due_date: v }))} />
+              </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
@@ -1377,7 +1436,14 @@ export default function DashboardPage({ token, email, onLogout }) {
                 <TextField required fullWidth label="Call Title" value={callForm.title} onChange={e => setCallForm(p => ({ ...p, title: e.target.value }))} />
                 <TextField fullWidth label="Notes" multiline rows={3} value={callForm.notes} onChange={e => setCallForm(p => ({ ...p, notes: e.target.value }))} />
                 <Grid container spacing={2}>
-                  <Grid item xs={6}><TextField fullWidth label="Scheduled At" type="datetime-local" value={callForm.scheduled_at} InputLabelProps={{ shrink: true }} onChange={e => setCallForm(p => ({ ...p, scheduled_at: e.target.value }))} /></Grid>
+                  <Grid item xs={6}>
+                    <DatePickerField
+                      label="Scheduled At"
+                      value={callForm.scheduled_at}
+                      onChange={v => setCallForm(p => ({ ...p, scheduled_at: v }))}
+                      showTime
+                    />
+                  </Grid>
                   <Grid item xs={6}><TextField fullWidth label="Duration (min)" type="number" value={callForm.duration} onChange={e => setCallForm(p => ({ ...p, duration: e.target.value }))} /></Grid>
                 </Grid>
                 <FormControl fullWidth>
@@ -1436,9 +1502,122 @@ export default function DashboardPage({ token, email, onLogout }) {
     );
   }
 
+  function renderClientDetail() {
+    if (!selectedClient) return null;
+
+    const clientProjects = projects.filter(p => p.client_id === selectedClient.id);
+    const clientMilestones = milestones.filter(m => clientProjects.some(p => p.id === m.project_id));
+
+    return (
+      <Stack spacing={3}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Button variant="outlined" startIcon={<GroupRoundedIcon />} onClick={() => { setViewingClientDetail(false); setSelectedClient(null); }}>Back to Clients</Button>
+            <Typography variant="h4">{selectedClient.name}</Typography>
+          </Stack>
+          <Chip label={selectedClient.status} color={statusColor(selectedClient.status)} />
+        </Box>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} sm={6} md={3}>
+            <KpiCard title="Active Projects" value={clientProjects.length} color="primary" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <KpiCard title="Finished Milestones" value={clientMilestones.filter(m => m.is_completed).length} color="success" />
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ height: "100%" }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Client Portfolio</Typography>
+                <Stack spacing={2} sx={{ mt: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">INDUSTRY</Typography>
+                    <Typography variant="body1">{selectedClient.industry || 'Not specified'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">COMMUNICATION</Typography>
+                    <Typography variant="body1">{selectedClient.email || 'No email'}</Typography>
+                    <Typography variant="body2">{selectedClient.phone || 'No phone'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">FINANCIALS</Typography>
+                    <Typography variant="body1">Terms: {selectedClient.payment_terms || 'Standard'}</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            <SectionFrame title="Active Projects" subtitle={`Operations for ${selectedClient.name}`}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Project</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Progress</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {clientProjects.length ? clientProjects.map(p => (
+                    <TableRow key={p.id}>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight={700}>{p.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">{p.priority} priority</Typography>
+                      </TableCell>
+                      <TableCell><Chip size="small" label={p.status} color={statusColor(p.status)} /></TableCell>
+                      <TableCell sx={{ minWidth: 150 }}>
+                        <ProgressEditor
+                          compact
+                          autoProgress={tasks.filter(t => t.project_id === p.id).length ? Math.round((tasks.filter(t => t.project_id === p.id && t.is_completed).length / tasks.filter(t => t.project_id === p.id).length) * 100) : 0}
+                          manualProgress={p.progress || 0}
+                          hasActiveTasks={tasks.some(t => t.project_id === p.id)}
+                          onSave={(v) => handleProgressUpdate(p.id, v)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )) : <TableRow><TableCell colSpan={3}>No projects for this client.</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </SectionFrame>
+          </Grid>
+
+          <Grid item xs={12}>
+            <SectionFrame title="Timeline & Milestones" subtitle="High-level roadmap and achievements">
+              <Grid container spacing={2}>
+                {clientMilestones.length ? clientMilestones.map(m => (
+                  <Grid item xs={12} sm={6} md={4} key={m.id}>
+                    <Paper sx={{ p: 2, border: "1px solid rgba(0,0,0,0.05)", borderRadius: 2, bgcolor: m.is_completed ? "rgba(46,125,50,0.05)" : "white" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                        <Typography variant="subtitle1" fontWeight={700}>{m.title}</Typography>
+                        <Chip size="small" label={m.is_completed ? "Finished" : "Planned"} color={m.is_completed ? "success" : "default"} />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>Project: {projects.find(p => p.id === m.project_id)?.title}</Typography>
+                      <Typography variant="body2" sx={{ mb: 2, height: 40, overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.description || "No description provided."}</Typography>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Typography variant="caption">Due: {m.due_date || "TBD"}</Typography>
+                        <Button size="small" variant="text" onClick={() => handleToggleMilestone(m.id)}>
+                          {m.is_completed ? "Reopen" : "Complete"}
+                        </Button>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                )) : <Grid item xs={12}><Typography color="text.secondary">No milestones for this client.</Typography></Grid>}
+              </Grid>
+            </SectionFrame>
+          </Grid>
+        </Grid>
+      </Stack>
+    );
+  }
+
   function renderBody() {
     switch (section) {
-      case "clients": return renderClients();
+      case "clients": return viewingClientDetail ? renderClientDetail() : renderClients();
       case "projects": return renderProjects();
       case "tasks": return renderTasks();
       case "milestones": return renderMilestones();
@@ -1449,14 +1628,14 @@ export default function DashboardPage({ token, email, onLogout }) {
   }
 
   return (
-    <AppShell sections={sectionConfig} activeSection={section} onSectionChange={setSection} title="Freelance CRM" subtitle="Mega-App Command Deck" userEmail={email} onLogout={onLogout}>
+    <AppShell sections={sectionConfig} activeSection={section} onSectionChange={setSection} title="ACTIVA" subtitle="Operations Deck" userEmail={email} onLogout={onLogout}>
       <Stack spacing={3}>
-        <Box sx={{ p: { xs: 2, md: 3 }, borderRadius: 3, border: "1px solid rgba(25,22,17,0.12)", background: "linear-gradient(120deg, rgba(21,94,99,0.14) 0%, rgba(180,73,21,0.12) 55%, rgba(251,248,239,1) 100%)" }}>
+        <Box sx={{ p: { xs: 2, md: 3 }, borderRadius: 2, border: "1px solid rgba(25,22,17,0.1)", bgcolor: "rgba(21,94,99,0.04)" }}>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between">
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "'IBM Plex Mono', monospace" }}>OPERATIONS SNAPSHOT</Typography>
-              <Typography variant="h3">Freelance Control Room</Typography>
-              <Typography variant="body2" color="text.secondary">Your mega-app for clients, projects, tasks, bugs, and more.</Typography>
+              <Typography variant="h3">ACTIVA Activities</Typography>
+              <Typography variant="body2" color="text.secondary">Your <Box component="span" sx={{ fontWeight: 'bold', color: "#8b9b75" }}>ideal</Box> app for clients, projects, tasks, and bugs.</Typography>
             </Box>
             <Stack direction="row" spacing={1}>
               <Chip icon={<InsightsRoundedIcon />} label={`${metrics.projectCount} projects`} />

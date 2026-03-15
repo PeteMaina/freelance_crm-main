@@ -33,9 +33,22 @@ export async function request(path, options = {}) {
   const data = await parseResponse(response);
 
   if (!response.ok) {
-    const message =
-      (data && typeof data === "object" && (data.detail || data.message)) ||
-      `Request failed with status ${response.status}`;
+    let message = `Request failed with status ${response.status}`;
+    
+    if (data) {
+      if (typeof data.detail === 'string') {
+        message = data.detail;
+      } else if (Array.isArray(data.detail)) {
+        // Handle FastAPI validation error arrays
+        message = data.detail.map(err => {
+          const loc = err.loc ? err.loc.join('.') : '';
+          return loc ? `${loc}: ${err.msg}` : err.msg;
+        }).join(', ');
+      } else if (data.message) {
+        message = data.message;
+      }
+    }
+    
     throw new Error(message);
   }
 

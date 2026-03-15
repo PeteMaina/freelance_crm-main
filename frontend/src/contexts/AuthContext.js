@@ -12,6 +12,9 @@ export function AuthProvider({ children }) {
 
   async function login(credentials) {
     const data = await loginUser(credentials);
+    // Add a signature delay for branding animations to play
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
     localStorage.setItem(TOKEN_KEY, data.access_token);
     localStorage.setItem(EMAIL_KEY, credentials.email);
     setToken(data.access_token);
