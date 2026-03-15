@@ -18,8 +18,12 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 @router.post("/", response_model=ProjectResponse, status_code=201)
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     """Create a new project with default phases"""
-    created = project_crud.create_project(db, project.dict())
-    return project_crud.get_projects(db)[-1]
+    project_data = project.dict()
+    # Default user_id until auth middleware injects it
+    if "user_id" not in project_data or not project_data.get("user_id"):
+        project_data["user_id"] = 1
+    created = project_crud.create_project(db, project_data)
+    return created
 
 
 @router.get("/", response_model=List[ProjectResponse])
@@ -44,6 +48,34 @@ def list_projects(
 def search_projects(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     """Search projects by title"""
     return project_crud.get_projects(db, search=q)
+
+
+@router.get("/tasks/all", response_model=List[TaskResponse])
+def list_all_tasks(
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    assignee: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get all tasks across all projects"""
+    return project_crud.get_tasks(db, None, status, priority, assignee)
+
+
+@router.get("/milestones/all", response_model=List[MilestoneResponse])
+def list_all_milestones(db: Session = Depends(get_db)):
+    """Get all milestones across all projects"""
+    return project_crud.get_milestones(db, None)
+
+
+@router.get("/bugs/all", response_model=List[BugResponse])
+def list_all_bugs(
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    priority: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get all bugs across all projects"""
+    return project_crud.get_bugs(db, None, status, severity, priority)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -153,15 +185,6 @@ def list_tasks(
     return project_crud.get_tasks(db, project_id, status, priority, assignee)
 
 
-@router.get("/tasks/all", response_model=List[TaskResponse])
-def list_all_tasks(
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    assignee: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Get all tasks across all projects"""
-    return project_crud.get_tasks(db, None, status, priority, assignee)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
@@ -201,7 +224,11 @@ def create_milestone(project_id: int, milestone: MilestoneCreate, db: Session = 
     """Create a new milestone"""
     milestone_data = milestone.dict()
     milestone_data['project_id'] = project_id
-    return project_crud.create_milestone(db, milestone_data)
+    # Default user_id until auth context is fully ready
+    if 'user_id' not in milestone_data or not milestone_data.get('user_id'):
+        milestone_data['user_id'] = 1
+    created = project_crud.create_milestone(db, milestone_data)
+    return created
 
 
 @router.get("/{project_id}/milestones", response_model=List[MilestoneResponse])
@@ -210,10 +237,6 @@ def list_milestones(project_id: int, db: Session = Depends(get_db)):
     return project_crud.get_milestones(db, project_id)
 
 
-@router.get("/milestones/all", response_model=List[MilestoneResponse])
-def list_all_milestones(db: Session = Depends(get_db)):
-    """Get all milestones across all projects"""
-    return project_crud.get_milestones(db, None)
 
 
 @router.patch("/milestones/{milestone_id}", response_model=MilestoneResponse)
@@ -244,7 +267,11 @@ def create_bug(project_id: int, bug: BugCreate, db: Session = Depends(get_db)):
     """Create a new bug"""
     bug_data = bug.dict()
     bug_data['project_id'] = project_id
-    return project_crud.create_bug(db, bug_data)
+    # Default user_id until auth context is fully ready
+    if 'user_id' not in bug_data or not bug_data.get('user_id'):
+        bug_data['user_id'] = 1
+    created = project_crud.create_bug(db, bug_data)
+    return created
 
 
 @router.get("/{project_id}/bugs", response_model=List[BugResponse])
@@ -259,15 +286,6 @@ def list_bugs(
     return project_crud.get_bugs(db, project_id, status, severity, priority)
 
 
-@router.get("/bugs/all", response_model=List[BugResponse])
-def list_all_bugs(
-    status: Optional[str] = None,
-    severity: Optional[str] = None,
-    priority: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Get all bugs across all projects"""
-    return project_crud.get_bugs(db, None, status, severity, priority)
 
 
 @router.get("/bugs/{bug_id}", response_model=BugResponse)

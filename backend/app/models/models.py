@@ -12,6 +12,7 @@ class Client(Base):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     email = Column(String, nullable=True)
     phone = Column(String, nullable=True)
@@ -134,6 +135,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String, default="active")
@@ -159,8 +161,8 @@ class Project(Base):
     # Progress
     progress = Column(Integer, default=0)
     
-    # Client association
-    client_id = Column(Integer, ForeignKey("clients.id"))
+    # Client association (nullable — client can be assigned later)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     
     # Custom fields
     custom_fields = Column(Text, nullable=True)
@@ -173,10 +175,12 @@ class Project(Base):
     client = relationship("Client", back_populates="projects")
     phases = relationship("ProjectPhase", back_populates="project", cascade="all, delete")
     calls = relationship("Call", back_populates="project", cascade="all, delete")
+    sprints = relationship("Sprint", back_populates="project", cascade="all, delete")
     communications = relationship("Communication", back_populates="project", cascade="all, delete")
     tasks = relationship("Task", back_populates="project", cascade="all, delete")
     milestones = relationship("Milestone", back_populates="project", cascade="all, delete")
     bugs = relationship("Bug", back_populates="project", cascade="all, delete")
+    notifications = relationship("Notification", back_populates="project", cascade="all, delete")
 
 
 class Task(Base):
@@ -185,6 +189,7 @@ class Task(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String, default="todo")  # todo, in_progress, done
@@ -221,6 +226,7 @@ class Milestone(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
@@ -237,6 +243,7 @@ class Bug(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
@@ -304,5 +311,101 @@ class Call(Base):
     call_type = Column(String, default="general")  # discovery, follow_up, retrospective, etc.
     
     project_id = Column(Integer, ForeignKey("projects.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="calls")
+
+
+class Sprint(Base):
+    """
+    Sprint model for agile project management.
+    """
+    __tablename__ = "sprints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    goal = Column(Text, nullable=True)
+    status = Column(String, default="planning")  # planning, active, completed
+    
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    
+    velocity = Column(Float, default=0)
+    capacity = Column(Float, default=0)
+    
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    project = relationship("Project", back_populates="sprints")
+
+
+class PersonalTodo(Base):
+    """
+    Personal TODO list for standalone tasks not tied to projects.
+    """
+    __tablename__ = "personal_todos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="todo")  # todo, in_progress, done
+    priority = Column(String, default="medium")  # critical, high, medium, low
+    
+    due_date = Column(Date, nullable=True)
+    start_date = Column(Date, nullable=True)
+    
+    estimated_hours = Column(Float, nullable=True)
+    actual_hours = Column(Float, default=0)
+    
+    progress = Column(Integer, default=0)
+    is_completed = Column(Boolean, default=False)
+    
+    # Recurrence
+    is_recurring = Column(Boolean, default=False)
+    recurrence_pattern = Column(String, nullable=True)  # daily, weekly, monthly
+    
+    # Context/location tags
+    context = Column(String, nullable=True)  # @office, @home, etc.
+    location = Column(String, nullable=True)
+    
+    # Categories
+    category = Column(String, nullable=True)
+    tags = Column(String, nullable=True)
+    
+    # Waiting for / Someday
+    is_waiting = Column(Boolean, default=False)
+    waiting_for = Column(String, nullable=True)
+    is_someday = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Order for manual sorting
+    order = Column(Integer, default=0)
+
+
+class Notification(Base):
+    """
+    Notifications for deadlines and events.
+    """
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=True)
+    type = Column(String, nullable=False)  # milestone, task, project
+    related_id = Column(Integer, nullable=False)
+    alert_type = Column(String, nullable=False)  # 6h, 1h, due
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+
+    project = relationship("Project", back_populates="notifications")

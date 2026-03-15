@@ -23,7 +23,7 @@ class TaskBase(BaseModel):
 
 
 class TaskCreate(TaskBase):
-    project_id: int
+    project_id: Optional[int] = None
 
 
 class TaskUpdate(BaseModel):
@@ -52,7 +52,7 @@ class TaskResponse(TaskBase):
     completed_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Milestone Schemas
@@ -65,7 +65,7 @@ class MilestoneBase(BaseModel):
 
 
 class MilestoneCreate(MilestoneBase):
-    project_id: int
+    project_id: Optional[int] = None
 
 
 class MilestoneUpdate(BaseModel):
@@ -82,7 +82,7 @@ class MilestoneResponse(MilestoneBase):
     completed_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Bug Schemas
@@ -105,7 +105,7 @@ class BugBase(BaseModel):
 
 
 class BugCreate(BugBase):
-    project_id: int
+    project_id: Optional[int] = None
 
 
 class BugUpdate(BaseModel):
@@ -135,7 +135,7 @@ class BugResponse(BugBase):
     closed_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Phase Schemas
@@ -149,7 +149,7 @@ class PhaseBase(BaseModel):
 
 
 class PhaseCreate(PhaseBase):
-    project_id: int
+    project_id: Optional[int] = None
 
 
 class PhaseUpdate(BaseModel):
@@ -166,7 +166,7 @@ class PhaseResponse(PhaseBase):
     project_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Project Schemas
@@ -187,7 +187,7 @@ class ProjectBase(BaseModel):
     expected_end_date: Optional[date] = None
     actual_end_date: Optional[date] = None
     progress: int = 0
-    client_id: int
+    client_id: Optional[int] = None
     custom_fields: Optional[str] = None
 
 
@@ -222,7 +222,7 @@ class ProjectResponse(ProjectBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ProjectDetailResponse(ProjectResponse):
@@ -232,5 +232,5 @@ class ProjectDetailResponse(ProjectResponse):
     bugs: List[BugResponse] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 

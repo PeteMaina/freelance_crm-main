@@ -18,7 +18,11 @@ router = APIRouter(prefix="/clients", tags=["Clients"])
 @router.post("/", response_model=ClientResponse, status_code=201)
 def create_client(client: ClientCreate, db: Session = Depends(get_db)):
     """Create a new client"""
-    return client_crud.create_client(db, client.dict())
+    client_data = client.dict()
+    # Default user_id until auth middleware injects it
+    if "user_id" not in client_data or not client_data.get("user_id"):
+        client_data["user_id"] = 1
+    return client_crud.create_client(db, client_data)
 
 
 @router.get("/", response_model=List[ClientResponse])

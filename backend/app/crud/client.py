@@ -17,9 +17,11 @@ def create_client(db: Session, client_data: dict) -> Client:
     return client
 
 
-def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None) -> List[Client]:
+def get_clients(db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None, user_id: Optional[int] = None) -> List[Client]:
     """Get all clients with optional search"""
     query = db.query(Client)
+    if user_id:
+        query = query.filter(Client.user_id == user_id)
     if search:
         search_term = f"%{search}%"
         query = query.filter(
