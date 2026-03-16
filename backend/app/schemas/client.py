@@ -20,7 +20,7 @@ class ClientContactResponse(ClientContactBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ClientContractBase(BaseModel):
@@ -41,7 +41,7 @@ class ClientContractResponse(ClientContractBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class InvoiceBase(BaseModel):
@@ -62,7 +62,7 @@ class InvoiceResponse(InvoiceBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class CommunicationBase(BaseModel):
@@ -86,7 +86,7 @@ class CommunicationResponse(CommunicationBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ClientBase(BaseModel):
@@ -160,7 +160,7 @@ class ClientResponse(ClientBase):
     custom_fields: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ClientDetailResponse(ClientResponse):
@@ -169,5 +169,5 @@ class ClientDetailResponse(ClientResponse):
     invoices: List[InvoiceResponse] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 

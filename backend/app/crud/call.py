@@ -71,34 +71,43 @@ def delete_call(db: Session, call_id: int) -> bool:
 
 
 # Get all calls across all projects (for dashboard)
-def get_all_calls(db: Session, skip: int = 0, limit: int = 100) -> List[Call]:
+def get_all_calls(db: Session, skip: int = 0, limit: int = 100, user_id: Optional[int] = None) -> List[Call]:
     """Get all calls"""
-    return db.query(Call).order_by(Call.scheduled_at.desc()).offset(skip).limit(limit).all()
+    query = db.query(Call)
+    if user_id:
+        query = query.filter(Call.user_id == user_id)
+    return query.order_by(Call.scheduled_at.desc()).offset(skip).limit(limit).all()
 
 
 # Get upcoming calls
-def get_upcoming_calls(db: Session, days: int = 7) -> List[Call]:
+def get_upcoming_calls(db: Session, days: int = 7, user_id: Optional[int] = None) -> List[Call]:
     """Get upcoming calls within specified days"""
     from datetime import timedelta
     now = datetime.utcnow()
     end_date = now + timedelta(days=days)
     
-    return db.query(Call).filter(
+    query = db.query(Call).filter(
         Call.scheduled_at >= now,
         Call.scheduled_at <= end_date,
         Call.completed == False
-    ).order_by(Call.scheduled_at).all()
+    )
+    if user_id:
+        query = query.filter(Call.user_id == user_id)
+    return query.order_by(Call.scheduled_at).all()
 
 
 # Get overdue calls
-def get_overdue_calls(db: Session) -> List[Call]:
+def get_overdue_calls(db: Session, user_id: Optional[int] = None) -> List[Call]:
     """Get overdue incomplete calls"""
     now = datetime.utcnow()
     
-    return db.query(Call).filter(
+    query = db.query(Call).filter(
         Call.scheduled_at < now,
         Call.completed == False
-    ).order_by(Call.scheduled_at).all()
+    )
+    if user_id:
+        query = query.filter(Call.user_id == user_id)
+    return query.order_by(Call.scheduled_at).all()
 
 
 # Sprint CRUD
@@ -170,9 +179,13 @@ def get_personal_todos(db: Session,
                        category: Optional[str] = None,
                        is_completed: Optional[bool] = None,
                        is_waiting: Optional[bool] = None,
-                       is_someday: Optional[bool] = None) -> List[PersonalTodo]:
+                       is_someday: Optional[bool] = None,
+                       user_id: Optional[int] = None) -> List[PersonalTodo]:
     """Get personal todos with filters"""
     query = db.query(PersonalTodo)
+    
+    if user_id:
+        query = query.filter(PersonalTodo.user_id == user_id)
     
     if status:
         query = query.filter(PersonalTodo.status == status)

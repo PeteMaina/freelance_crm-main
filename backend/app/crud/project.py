@@ -73,9 +73,13 @@ def get_projects(db: Session, skip: int = 0, limit: int = 100,
                  client_id: Optional[int] = None,
                  is_personal: Optional[bool] = None,
                  is_growth: Optional[bool] = None,
-                 priority: Optional[str] = None) -> List[Project]:
+                 priority: Optional[str] = None,
+                 user_id: Optional[int] = None) -> List[Project]:
     """Get all projects with filters"""
     query = db.query(Project).options(joinedload(Project.phases))
+    
+    if user_id:
+        query = query.filter(Project.user_id == user_id)
     
     if search:
         search_term = f"%{search}%"
@@ -142,7 +146,7 @@ def delete_project(db: Session, project_id: int) -> bool:
     return False
 
 
-def clone_project(db: Session, project_id: int, new_title: str) -> Optional[Project]:
+def clone_project(db: Session, project_id: int, new_title: str, user_id: Optional[int] = None) -> Optional[Project]:
     """Clone a project with all its data"""
     original = get_project(db, project_id)
     if not original:
@@ -162,7 +166,8 @@ def clone_project(db: Session, project_id: int, new_title: str) -> Optional[Proj
         billing_type=original.billing_type,
         client_id=original.client_id,
         is_personal=original.is_personal,
-        is_growth=original.is_growth
+        is_growth=original.is_growth,
+        user_id=user_id or original.user_id
     )
     db.add(new_project)
     db.commit()
@@ -262,9 +267,13 @@ def create_task(db: Session, task_data: dict) -> Task:
 def get_tasks(db: Session, project_id: Optional[int] = None, 
               status: Optional[str] = None,
               priority: Optional[str] = None,
-              assignee: Optional[str] = None) -> List[Task]:
+              assignee: Optional[str] = None,
+              user_id: Optional[int] = None) -> List[Task]:
     """Get tasks with filters"""
     query = db.query(Task)
+    
+    if user_id:
+        query = query.filter(Task.user_id == user_id)
     
     if project_id:
         query = query.filter(Task.project_id == project_id)
@@ -352,9 +361,11 @@ def create_milestone(db: Session, milestone_data: dict) -> Milestone:
     return milestone
 
 
-def get_milestones(db: Session, project_id: Optional[int] = None) -> List[Milestone]:
+def get_milestones(db: Session, project_id: Optional[int] = None, user_id: Optional[int] = None) -> List[Milestone]:
     """Get milestones with optional filter"""
     query = db.query(Milestone)
+    if user_id:
+        query = query.filter(Milestone.user_id == user_id)
     if project_id:
         query = query.filter(Milestone.project_id == project_id)
     return query.order_by(Milestone.due_date).all()
@@ -414,9 +425,13 @@ def create_bug(db: Session, bug_data: dict) -> Bug:
 def get_bugs(db: Session, project_id: Optional[int] = None,
              status: Optional[str] = None,
              severity: Optional[str] = None,
-             priority: Optional[str] = None) -> List[Bug]:
+             priority: Optional[str] = None,
+             user_id: Optional[int] = None) -> List[Bug]:
     """Get bugs with filters"""
     query = db.query(Bug)
+    
+    if user_id:
+        query = query.filter(Bug.user_id == user_id)
     
     if project_id:
         query = query.filter(Bug.project_id == project_id)
