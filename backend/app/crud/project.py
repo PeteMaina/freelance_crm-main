@@ -127,9 +127,8 @@ def update_project(db: Session, project_id: int, project_data: dict) -> Optional
                 setattr(project, key, value)
         project.updated_at = datetime.utcnow()
         
-        # Recalculate progress if tasks exist
-        if project.tasks:
-            project.progress = calculate_task_progress(project)
+        # Recalculate progress
+        project.progress = calculate_task_progress(project)
         
         db.commit()
         db.refresh(project)
@@ -303,11 +302,20 @@ def update_task(db: Session, task_id: int, task_data: dict) -> Optional[Task]:
             if value is not None:
                 setattr(task, key, value)
         
-        # Handle completion
-        if task_data.get('is_completed') and not task.completed_at:
-            task.completed_at = datetime.utcnow()
+        # Sync status and is_completed
+        if task_data.get('status') == 'done' or task_data.get('is_completed'):
+            task.is_completed = True
             task.status = "done"
             task.progress = 100
+            if not task.completed_at:
+                task.completed_at = datetime.utcnow()
+        elif task_data.get('status') in ['todo', 'in_progress'] or task_data.get('is_completed') is False:
+            task.is_completed = False
+            if task_data.get('status'):
+                task.status = task_data.get('status')
+            if task.progress == 100:
+                task.progress = 0
+            task.completed_at = None
         
         task.updated_at = datetime.utcnow()
         db.commit()
