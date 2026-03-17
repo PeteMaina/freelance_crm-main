@@ -103,19 +103,24 @@ def get_projects(db: Session, skip: int = 0, limit: int = 100,
     return query.offset(skip).limit(limit).all()
 
 
-def get_project(db: Session, project_id: int) -> Optional[Project]:
-    """Get a single project with all relationships"""
-    return db.query(Project).options(
+def get_project(db: Session, project_id: int, user_id: Optional[int] = None) -> Optional[Project]:
+    """Get a single project with ownership check"""
+    query = db.query(Project).options(
         joinedload(Project.phases),
         joinedload(Project.tasks),
         joinedload(Project.milestones),
         joinedload(Project.bugs)
-    ).filter(Project.id == project_id).first()
+    ).filter(Project.id == project_id)
+    
+    if user_id:
+        query = query.filter(Project.user_id == user_id)
+        
+    return query.first()
 
 
-def get_project_detail(db: Session, project_id: int) -> Optional[Project]:
+def get_project_detail(db: Session, project_id: int, user_id: Optional[int] = None) -> Optional[Project]:
     """Get detailed project with all related data"""
-    return get_project(db, project_id)
+    return get_project(db, project_id, user_id=user_id)
 
 
 def update_project(db: Session, project_id: int, project_data: dict) -> Optional[Project]:
@@ -289,9 +294,12 @@ def get_tasks(db: Session, project_id: Optional[int] = None,
     return query.order_by(Task.order).all()
 
 
-def get_task(db: Session, task_id: int) -> Optional[Task]:
+def get_task(db: Session, task_id: int, user_id: Optional[int] = None) -> Optional[Task]:
     """Get a single task"""
-    return db.query(Task).filter(Task.id == task_id).first()
+    query = db.query(Task).filter(Task.id == task_id)
+    if user_id:
+        query = query.filter(Task.user_id == user_id)
+    return query.first()
 
 
 def update_task(db: Session, task_id: int, task_data: dict) -> Optional[Task]:
@@ -456,9 +464,12 @@ def get_bugs(db: Session, project_id: Optional[int] = None,
     return query.order_by(Bug.created_at.desc()).all()
 
 
-def get_bug(db: Session, bug_id: int) -> Optional[Bug]:
+def get_bug(db: Session, bug_id: int, user_id: Optional[int] = None) -> Optional[Bug]:
     """Get a single bug"""
-    return db.query(Bug).filter(Bug.id == bug_id).first()
+    query = db.query(Bug).filter(Bug.id == bug_id)
+    if user_id:
+        query = query.filter(Bug.user_id == user_id)
+    return query.first()
 
 
 def update_bug(db: Session, bug_id: int, bug_data: dict) -> Optional[Bug]:

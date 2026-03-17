@@ -75,9 +75,12 @@ def create_client_contact(db: Session, contact_data: dict) -> ClientContact:
     return contact
 
 
-def get_client_contacts(db: Session, client_id: int) -> List[ClientContact]:
+def get_client_contacts(db: Session, client_id: int, user_id: Optional[int] = None) -> List[ClientContact]:
     """Get all contacts for a client"""
-    return db.query(ClientContact).filter(ClientContact.client_id == client_id).all()
+    query = db.query(ClientContact).filter(ClientContact.client_id == client_id)
+    if user_id:
+        query = query.filter(ClientContact.user_id == user_id)
+    return query.all()
 
 
 def delete_client_contact(db: Session, contact_id: int) -> bool:
@@ -100,9 +103,12 @@ def create_client_contract(db: Session, contract_data: dict) -> ClientContract:
     return contract
 
 
-def get_client_contracts(db: Session, client_id: int) -> List[ClientContract]:
+def get_client_contracts(db: Session, client_id: int, user_id: Optional[int] = None) -> List[ClientContract]:
     """Get all contracts for a client"""
-    return db.query(ClientContract).filter(ClientContract.client_id == client_id).all()
+    query = db.query(ClientContract).filter(ClientContract.client_id == client_id)
+    if user_id:
+        query = query.filter(ClientContract.user_id == user_id)
+    return query.all()
 
 
 def delete_client_contract(db: Session, contract_id: int) -> bool:
@@ -125,9 +131,11 @@ def create_invoice(db: Session, invoice_data: dict) -> Invoice:
     return invoice
 
 
-def get_invoices(db: Session, client_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[Invoice]:
-    """Get invoices, optionally filtered by client"""
+def get_invoices(db: Session, client_id: Optional[int] = None, skip: int = 0, limit: int = 100, user_id: Optional[int] = None) -> List[Invoice]:
+    """Get invoices, optionally filtered by client or user"""
     query = db.query(Invoice)
+    if user_id:
+        query = query.filter(Invoice.user_id == user_id)
     if client_id:
         query = query.filter(Invoice.client_id == client_id)
     return query.offset(skip).limit(limit).all()
@@ -172,9 +180,11 @@ def create_communication(db: Session, comm_data: dict) -> Communication:
     return comm
 
 
-def get_communications(db: Session, client_id: Optional[int] = None, project_id: Optional[int] = None) -> List[Communication]:
+def get_communications(db: Session, client_id: Optional[int] = None, project_id: Optional[int] = None, user_id: Optional[int] = None) -> List[Communication]:
     """Get communications, optionally filtered"""
     query = db.query(Communication)
+    if user_id:
+        query = query.filter(Communication.user_id == user_id)
     if client_id:
         query = query.filter(Communication.client_id == client_id)
     if project_id:

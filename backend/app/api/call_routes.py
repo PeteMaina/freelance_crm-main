@@ -37,9 +37,14 @@ def list_calls(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all calls with optional filters"""
+    """Get all calls with optional filters and ownership check"""
     if project_id:
-        return call_crud.get_calls(db, project_id, completed, call_type)
+        # Verify project ownership if project_id is provided
+        from app.crud import project as project_crud
+        p = project_crud.get_project(db, project_id, user_id=current_user.id)
+        if not p:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return call_crud.get_calls(db, project_id, completed, call_type, user_id=current_user.id)
     return call_crud.get_all_calls(db, skip, limit, user_id=current_user.id)
 
 
@@ -68,8 +73,8 @@ def get_call(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a single call"""
-    call = call_crud.get_call(db, call_id)
+    """Get a single call with ownership check"""
+    call = call_crud.get_call(db, call_id, user_id=current_user.id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     return call
@@ -82,11 +87,11 @@ def update_call(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update a call"""
-    updated = call_crud.update_call(db, call_id, call.dict(exclude_unset=True))
-    if not updated:
+    """Update a call with ownership check"""
+    c = call_crud.get_call(db, call_id, user_id=current_user.id)
+    if not c:
         raise HTTPException(status_code=404, detail="Call not found")
-    return updated
+    return call_crud.update_call(db, call_id, call.dict(exclude_unset=True))
 
 
 @router.patch("/{call_id}/toggle")
@@ -95,7 +100,10 @@ def toggle_call(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Toggle call completion status"""
+    """Toggle call completion status with ownership check"""
+    c = call_crud.get_call(db, call_id, user_id=current_user.id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Call not found")
     return call_crud.toggle_call(db, call_id)
 
 
@@ -105,9 +113,11 @@ def delete_call(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a call"""
-    if not call_crud.delete_call(db, call_id):
+    """Delete a call with ownership check"""
+    c = call_crud.get_call(db, call_id, user_id=current_user.id)
+    if not c:
         raise HTTPException(status_code=404, detail="Call not found")
+    call_crud.delete_call(db, call_id)
 
 
 # Sprint endpoints
@@ -132,8 +142,13 @@ def list_sprints(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all sprints with optional filter"""
-    return call_crud.get_sprints(db, project_id)
+    """Get all sprints with optional filter and ownership check"""
+    if project_id:
+        from app.crud import project as project_crud
+        p = project_crud.get_project(db, project_id, user_id=current_user.id)
+        if not p:
+            raise HTTPException(status_code=404, detail="Project not found")
+    return call_crud.get_sprints(db, project_id, user_id=current_user.id)
 
 
 @sprint_router.get("/{sprint_id}", response_model=SprintResponse)
@@ -142,8 +157,8 @@ def get_sprint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a single sprint"""
-    sprint = call_crud.get_sprint(db, sprint_id)
+    """Get a single sprint with ownership check"""
+    sprint = call_crud.get_sprint(db, sprint_id, user_id=current_user.id)
     if not sprint:
         raise HTTPException(status_code=404, detail="Sprint not found")
     return sprint
@@ -215,8 +230,8 @@ def get_personal_todo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a single personal todo"""
-    todo = call_crud.get_personal_todo(db, todo_id)
+    """Get a single personal todo with ownership check"""
+    todo = call_crud.get_personal_todo(db, todo_id, user_id=current_user.id)
     if not todo:
         raise HTTPException(status_code=404, detail="Todo not found")
     return todo

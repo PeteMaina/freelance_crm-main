@@ -17,9 +17,13 @@ def create_call(db: Session, call_data: dict) -> Call:
 
 def get_calls(db: Session, project_id: Optional[int] = None, 
               completed: Optional[bool] = None,
-              call_type: Optional[str] = None) -> List[Call]:
+              call_type: Optional[str] = None,
+              user_id: Optional[int] = None) -> List[Call]:
     """Get calls with filters"""
     query = db.query(Call)
+    
+    if user_id:
+        query = query.filter(Call.user_id == user_id)
     
     if project_id:
         query = query.filter(Call.project_id == project_id)
@@ -33,9 +37,12 @@ def get_calls(db: Session, project_id: Optional[int] = None,
     return query.order_by(Call.scheduled_at.desc()).all()
 
 
-def get_call(db: Session, call_id: int) -> Optional[Call]:
-    """Get a single call"""
-    return db.query(Call).filter(Call.id == call_id).first()
+def get_call(db: Session, call_id: int, user_id: Optional[int] = None) -> Optional[Call]:
+    """Get a single call by ID and user"""
+    query = db.query(Call).filter(Call.id == call_id)
+    if user_id:
+        query = query.filter(Call.user_id == user_id)
+    return query.first()
 
 
 def update_call(db: Session, call_id: int, call_data: dict) -> Optional[Call]:
@@ -124,17 +131,22 @@ def create_sprint(db: Session, sprint_data: dict) -> Sprint:
     return sprint
 
 
-def get_sprints(db: Session, project_id: Optional[int] = None) -> List[Sprint]:
+def get_sprints(db: Session, project_id: Optional[int] = None, user_id: Optional[int] = None) -> List[Sprint]:
     """Get sprints with optional filter"""
     query = db.query(Sprint)
+    if user_id:
+        query = query.filter(Sprint.user_id == user_id)
     if project_id:
         query = query.filter(Sprint.project_id == project_id)
     return query.order_by(Sprint.start_date.desc()).all()
 
 
-def get_sprint(db: Session, sprint_id: int) -> Optional[Sprint]:
+def get_sprint(db: Session, sprint_id: int, user_id: Optional[int] = None) -> Optional[Sprint]:
     """Get a single sprint"""
-    return db.query(Sprint).filter(Sprint.id == sprint_id).first()
+    query = db.query(Sprint).filter(Sprint.id == sprint_id)
+    if user_id:
+        query = query.filter(Sprint.user_id == user_id)
+    return query.first()
 
 
 def update_sprint(db: Session, sprint_id: int, sprint_data: dict) -> Optional[Sprint]:
@@ -208,9 +220,12 @@ def get_personal_todos(db: Session,
     return query.order_by(PersonalTodo.order).all()
 
 
-def get_personal_todo(db: Session, todo_id: int) -> Optional[PersonalTodo]:
+def get_personal_todo(db: Session, todo_id: int, user_id: Optional[int] = None) -> Optional[PersonalTodo]:
     """Get a single personal todo"""
-    return db.query(PersonalTodo).filter(PersonalTodo.id == todo_id).first()
+    query = db.query(PersonalTodo).filter(PersonalTodo.id == todo_id)
+    if user_id:
+        query = query.filter(PersonalTodo.user_id == user_id)
+    return query.first()
 
 
 def update_personal_todo(db: Session, todo_id: int, todo_data: dict) -> Optional[PersonalTodo]:

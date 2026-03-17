@@ -65,6 +65,7 @@ class ClientContact(Base):
     __tablename__ = "client_contacts"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     client_id = Column(Integer, ForeignKey("clients.id"))
     name = Column(String, nullable=False)
     email = Column(String, nullable=True)
@@ -80,6 +81,7 @@ class ClientContract(Base):
     __tablename__ = "client_contracts"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     client_id = Column(Integer, ForeignKey("clients.id"))
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
@@ -97,6 +99,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     client_id = Column(Integer, ForeignKey("clients.id"))
     invoice_number = Column(String, nullable=False)
     amount = Column(Float, default=0)
@@ -114,6 +117,7 @@ class Communication(Base):
     __tablename__ = "communications"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     client_id = Column(Integer, ForeignKey("clients.id"))
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     type = Column(String, nullable=False)  # email, call, meeting, chat

@@ -100,8 +100,8 @@ def get_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a single project"""
-    project = project_crud.get_project(db, project_id)
+    """Get a single project with ownership check"""
+    project = project_crud.get_project(db, project_id, user_id=current_user.id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
@@ -113,8 +113,8 @@ def get_project_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get project with all related data"""
-    project = project_crud.get_project_detail(db, project_id)
+    """Get project with all related data and ownership check"""
+    project = project_crud.get_project_detail(db, project_id, user_id=current_user.id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
@@ -127,10 +127,13 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update a project"""
-    updated = project_crud.update_project(db, project_id, project.dict(exclude_unset=True))
-    if not updated:
+    """Update a project with ownership check"""
+    # Verify ownership first
+    p = project_crud.get_project(db, project_id, user_id=current_user.id)
+    if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+        
+    updated = project_crud.update_project(db, project_id, project.dict(exclude_unset=True))
     return updated
 
 
@@ -140,9 +143,12 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a project"""
-    if not project_crud.delete_project(db, project_id):
+    """Delete a project with ownership check"""
+    p = project_crud.get_project(db, project_id, user_id=current_user.id)
+    if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+        
+    project_crud.delete_project(db, project_id)
 
 
 @router.post("/{project_id}/clone", response_model=ProjectResponse)
@@ -165,7 +171,10 @@ def get_project_analytics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get analytics for a project"""
+    """Get analytics for a project with ownership check"""
+    p = project_crud.get_project(db, project_id, user_id=current_user.id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
     return project_crud.get_project_analytics(db, project_id)
 
 
@@ -177,7 +186,11 @@ def create_phase(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new phase"""
+    """Create a new phase with ownership check"""
+    p = project_crud.get_project(db, project_id, user_id=current_user.id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
     phase_data = phase.dict()
     phase_data["project_id"] = project_id
     return project_crud.create_phase(db, phase_data)
@@ -189,7 +202,10 @@ def list_phases(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all phases for a project"""
+    """Get all phases for a project with ownership check"""
+    p = project_crud.get_project(db, project_id, user_id=current_user.id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
     return project_crud.get_phases(db, project_id)
 
 
@@ -252,8 +268,8 @@ def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all tasks for a project"""
-    return project_crud.get_tasks(db, project_id, status, priority, assignee)
+    """Get all tasks for a project with ownership check"""
+    return project_crud.get_tasks(db, project_id, status, priority, assignee, user_id=current_user.id)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
@@ -262,8 +278,8 @@ def get_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a single task"""
-    task = project_crud.get_task(db, task_id)
+    """Get a single task with ownership check"""
+    task = project_crud.get_task(db, task_id, user_id=current_user.id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -325,8 +341,8 @@ def list_milestones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all milestones for a project"""
-    return project_crud.get_milestones(db, project_id)
+    """Get all milestones for a project with ownership check"""
+    return project_crud.get_milestones(db, project_id, user_id=current_user.id)
 
 
 @router.patch("/milestones/{milestone_id}", response_model=MilestoneResponse)
@@ -388,8 +404,8 @@ def list_bugs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all bugs for a project"""
-    return project_crud.get_bugs(db, project_id, status, severity, priority)
+    """Get all bugs for a project with ownership check"""
+    return project_crud.get_bugs(db, project_id, status, severity, priority, user_id=current_user.id)
 
 
 @router.get("/bugs/{bug_id}", response_model=BugResponse)
@@ -398,8 +414,8 @@ def get_bug(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a single bug"""
-    bug = project_crud.get_bug(db, bug_id)
+    """Get a single bug with ownership check"""
+    bug = project_crud.get_bug(db, bug_id, user_id=current_user.id)
     if not bug:
         raise HTTPException(status_code=404, detail="Bug not found")
     return bug

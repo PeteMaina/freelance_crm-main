@@ -1,6 +1,6 @@
-# Freelance CRM - Local Development Runbook
+# ACTIVA - Local Development Runbook
 
-This guide provides detailed instructions for running the Freelance CRM application locally without Docker.
+This guide provides detailed instructions for running the ACTIVA application locally without Docker.
 
 ## Prerequisites
 
