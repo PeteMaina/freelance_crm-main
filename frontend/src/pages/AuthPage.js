@@ -31,7 +31,7 @@ const defaultFields = {
 };
 
 export default function AuthPage() {
-  const { login, register } = useAuth();
+  const { login, register, wasAutoLoggedOut } = useAuth();
   const [mode, setMode] = useState("login");
   const [fields, setFields] = useState(defaultFields);
   const [busy, setBusy] = useState(false);
@@ -152,6 +152,11 @@ export default function AuthPage() {
                 ? "Use your existing account to continue."
                 : "Create an account and sign in automatically."}
             </Typography>
+            {wasAutoLoggedOut ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                You were signed out due to inactivity. Sign in to continue.
+              </Alert>
+            ) : null}
             {error ? (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
@@ -187,9 +192,9 @@ export default function AuthPage() {
                 {mode === "register" && (
                   <FormControlLabel
                     control={
-                      <Checkbox 
-                        checked={acceptedTerms} 
-                        onChange={(e) => setAcceptedTerms(e.target.checked)} 
+                      <Checkbox
+                        checked={acceptedTerms}
+                        onChange={(e) => setAcceptedTerms(e.target.checked)}
                         color="primary"
                       />
                     }
@@ -218,14 +223,14 @@ export default function AuthPage() {
 
       {/* Auth Success Animation Overlay */}
       {authSuccess && (
-        <Box 
-          sx={{ 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            width: '100%', 
-            height: '100%', 
-            bgcolor: 'rgba(251, 248, 239, 0.95)', 
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            bgcolor: 'rgba(251, 248, 239, 0.95)',
             zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
