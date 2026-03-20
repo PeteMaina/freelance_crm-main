@@ -54,7 +54,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { createCall, listCalls, toggleCall, getUpcomingCalls, getOverdueCalls } from "../api/callApi";
 import { createClient, listClients, updateClient, deleteClient, getClientMetrics, searchClients, createContact, listContacts } from "../api/clientApi";
-import { createProject, listProjects, togglePhase, createTask, listTasks, listAllTasks, toggleTask, createMilestone, listMilestones, listAllMilestones, toggleMilestone, createBug, listBugs, listAllBugs, updateProject, updateTask, deleteProject } from "../api/projectApi";
+import { createProject, listProjects, togglePhase, createTask, listTasks, listAllTasks, toggleTask, createMilestone, listMilestones, listAllMilestones, toggleMilestone, createBug, listBugs, listAllBugs, updateBug, deleteBug, updateProject, updateTask, deleteProject } from "../api/projectApi";
 import AppShell from "../components/AppShell";
 import KpiCard from "../components/KpiCard";
 import SectionFrame from "../components/SectionFrame";
@@ -606,7 +606,6 @@ export default function DashboardPage({ token, email, onLogout }) {
     try {
       const bugData = {
         ...bugForm,
-        project_id: Number(selectedProjectId)
       };
       await createBug(selectedProjectId, bugData, token);
       setBugForm(defaultBugForm);
@@ -619,6 +618,35 @@ export default function DashboardPage({ token, email, onLogout }) {
       setSubmitting("");
     }
   }
+
+  async function handleResolveBug(bugId, currentStatus) {
+    const newStatus = currentStatus === "resolved" ? "open" : "resolved";
+    setSubmitting(`bug-resolve-${bugId}`);
+    try {
+      await updateBug(bugId, { status: newStatus }, token);
+      notify(newStatus === "resolved" ? "Bug marked as resolved." : "Bug reopened.");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not update bug.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  async function handleDeleteBug(bugId) {
+    if (!confirm("Delete this bug permanently?")) return;
+    setSubmitting(`bug-delete-${bugId}`);
+    try {
+      await deleteBug(bugId, token);
+      notify("Bug deleted.");
+      await hydrate();
+    } catch (error) {
+      notify(error.message || "Could not delete bug.", "error");
+    } finally {
+      setSubmitting("");
+    }
+  }
+
 
   // Call handlers
   async function handleCallSubmit(event) {
@@ -1340,17 +1368,40 @@ export default function DashboardPage({ token, email, onLogout }) {
               <TableCell>Priority</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Environment</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {bugs.length ? bugs.map(bug => (
-              <TableRow key={bug.id} hover>
+              <TableRow key={bug.id} hover sx={{ bgcolor: bug.status === "resolved" || bug.status === "closed" ? "rgba(47,122,74,0.06)" : "transparent" }}>
                 <TableCell><Typography fontWeight={600}>{bug.title}</Typography></TableCell>
                 <TableCell>#{bug.project_id}</TableCell>
                 <TableCell><Chip size="small" label={bug.severity} color={severityColor(bug.severity)} /></TableCell>
                 <TableCell><Chip size="small" label={bug.priority} color={priorityColor(bug.priority)} /></TableCell>
                 <TableCell><Chip size="small" label={bug.status} color={statusColor(bug.status)} /></TableCell>
                 <TableCell>{bug.environment || '-'}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={0.5}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color={bug.status === "resolved" ? "warning" : "success"}
+                      onClick={() => handleResolveBug(bug.id, bug.status)}
+                      disabled={submitting === `bug-resolve-${bug.id}`}
+                    >
+                      {bug.status === "resolved" ? "Reopen" : "Resolve"}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => handleDeleteBug(bug.id)}
+                      disabled={submitting === `bug-delete-${bug.id}`}
+                    >
+                      Delete
+                    </Button>
+                  </Stack>
+                </TableCell>
               </TableRow>
             )) : (
               <TableRow><TableCell colSpan={6}>No bugs reported.</TableCell></TableRow>
