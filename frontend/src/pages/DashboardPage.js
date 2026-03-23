@@ -64,7 +64,7 @@ import KpiCard from "../components/KpiCard";
 import SectionFrame from "../components/SectionFrame";
 import DatePickerField from "../components/DatePickerField";
 import ProgressEditor from "../components/ProgressEditor";
-import LoadingIcon from "../components/LoadingIcon";
+
 
 const sectionConfig = [
   { key: "overview", label: "Overview", hint: "Health indicators" },
