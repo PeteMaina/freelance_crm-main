@@ -1719,7 +1719,7 @@ export default function DashboardPage({ token, email, onLogout }) {
         <DialogTitle sx={{ fontWeight: "bold" }}>Magic Link Generated</DialogTitle>
         <DialogContent>
           <Typography variant="body1" gutterBottom>
-            A magic link has been generated for <strong>{magicLinkData?.clientName}</strong>. 
+            A magic link has been generated for <strong>{magicLinkData?.clientName}</strong>.
             Share this link and the password below with them.
           </Typography>
           <Box sx={{ mt: 3, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
