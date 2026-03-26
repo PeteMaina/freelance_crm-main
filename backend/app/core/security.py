@@ -8,6 +8,7 @@ import bcrypt
 
 from app.database import get_db
 from app.models.user import User
+from app.models.models import Client
 
 # Bcrypt handles up to 72 bytes; truncate to avoid runtime errors on newer bcrypt builds.
 def _normalize_password(password: str) -> bytes:
@@ -76,3 +77,32 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_current_client(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> Client:
+    """
+    FastAPI dependency — validates the Client JWT token
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired portal token. Please log in again using your magic link.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        # We'll use 'client_id' in the payload instead of 'sub' (email) to distinguish from Users
+        client_id: int = payload.get("client_id")
+        if client_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if client is None:
+        raise credentials_exception
+
+    return client

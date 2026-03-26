@@ -57,14 +57,17 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { createCall, listCalls, toggleCall, getUpcomingCalls, getOverdueCalls } from "../api/callApi";
-import { createClient, listClients, updateClient, deleteClient, getClientMetrics, searchClients, createContact, listContacts } from "../api/clientApi";
+import { createClient, listClients, updateClient, deleteClient, getClientMetrics, searchClients, createContact, listContacts, generateMagicLink } from "../api/clientApi";
 import { createProject, listProjects, togglePhase, createTask, listTasks, listAllTasks, toggleTask, createMilestone, listMilestones, listAllMilestones, toggleMilestone, createBug, listBugs, listAllBugs, updateBug, deleteBug, updateProject, updateTask, deleteProject } from "../api/projectApi";
 import AppShell from "../components/AppShell";
 import KpiCard from "../components/KpiCard";
 import SectionFrame from "../components/SectionFrame";
 import DatePickerField from "../components/DatePickerField";
 import ProgressEditor from "../components/ProgressEditor";
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 
 const sectionConfig = [
   { key: "overview", label: "Overview", hint: "Health indicators" },
@@ -199,6 +202,10 @@ export default function DashboardPage({ token, email, onLogout }) {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [allCalls, setAllCalls] = useState([]);
 
+  // Magic Link Portal States
+  const [magicLinkData, setMagicLinkData] = useState(null);
+  const [magicLinkDialogOpen, setMagicLinkDialogOpen] = useState(false);
+
   // Form states
   const [clientForm, setClientForm] = useState(defaultClientForm);
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
@@ -223,10 +230,7 @@ export default function DashboardPage({ token, email, onLogout }) {
   const [editTask, setEditTask] = useState(null);
   const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
   const [bugDialogOpen, setBugDialogOpen] = useState(false);
-  const [selectedBug, setSelectedBug] = useState(null);
-  const [bugDetailOpen, setBugDetailOpen] = useState(false);
-  const [bugEditMode, setBugEditMode] = useState(false);
-  const [bugEditForm, setBugEditForm] = useState({});
+
   const [snack, setSnack] = useState({
     open: false,
     severity: "success",
@@ -325,6 +329,26 @@ export default function DashboardPage({ token, email, onLogout }) {
   function notify(message, severity = "success") {
     setSnack({ open: true, severity, message });
   }
+
+  const handleGenerateMagicLink = async (clientId) => {
+    setSubmitting("magic-link");
+    try {
+      const updatedClient = await generateMagicLink(clientId, token);
+      const portalUrl = `${window.location.origin}${window.location.pathname}?token=${updatedClient.magic_link_token}`;
+      setMagicLinkData({
+        url: portalUrl,
+        password: updatedClient.magic_link_password,
+        clientName: updatedClient.name
+      });
+      setMagicLinkDialogOpen(true);
+      await hydrate();
+    } catch (err) {
+      notify("Failed to generate magic link", "error");
+    } finally {
+      setSubmitting("");
+    }
+  };
+
 
   async function hydrate() {
     setLoading(true);
@@ -647,8 +671,6 @@ export default function DashboardPage({ token, email, onLogout }) {
     try {
       await deleteBug(bugId, token);
       notify("Bug deleted.");
-      setBugDetailOpen(false);
-      setSelectedBug(null);
       await hydrate();
     } catch (error) {
       notify(error.message || "Could not delete bug.", "error");
@@ -656,46 +678,6 @@ export default function DashboardPage({ token, email, onLogout }) {
       setSubmitting("");
     }
   }
-
-  function openBugDetail(bug) {
-    setSelectedBug(bug);
-    setBugEditForm({
-      title: bug.title || "",
-      description: bug.description || "",
-      severity: bug.severity || "medium",
-      priority: bug.priority || "medium",
-      status: bug.status || "open",
-      steps_to_reproduce: bug.steps_to_reproduce || "",
-      expected_behavior: bug.expected_behavior || "",
-      actual_behavior: bug.actual_behavior || "",
-      environment: bug.environment || "",
-      browser: bug.browser || "",
-      operating_system: bug.operating_system || "",
-      device: bug.device || "",
-      assignee: bug.assignee || "",
-      reporter: bug.reporter || "",
-    });
-    setBugEditMode(false);
-    setBugDetailOpen(true);
-  }
-
-  async function handleSaveBugEdit() {
-    if (!selectedBug) return;
-    setSubmitting("bug-edit");
-    try {
-      await updateBug(selectedBug.id, bugEditForm, token);
-      notify("Bug updated.");
-      setBugEditMode(false);
-      await hydrate();
-      // refresh selectedBug state with new values
-      setSelectedBug(prev => ({ ...prev, ...bugEditForm }));
-    } catch (error) {
-      notify(error.message || "Could not update bug.", "error");
-    } finally {
-      setSubmitting("");
-    }
-  }
-
 
 
   // Call handlers
@@ -929,6 +911,7 @@ export default function DashboardPage({ token, email, onLogout }) {
                   </Box>
                   <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: "wrap" }}>
                     <Button size="small" variant="outlined" onClick={() => { setSelectedClient(client); setViewingClientDetail(true); }}>View Details</Button>
+                    <Button size="small" variant="outlined" color="secondary" onClick={() => handleGenerateMagicLink(client.id)} disabled={submitting === "magic-link"}>Magic Link</Button>
                     <Button size="small" onClick={() => openEditClient(client)}>Edit</Button>
                     <Button size="small" color="error" onClick={() => handleDeleteClient(client.id)}>Delete</Button>
                   </Box>
@@ -1418,258 +1401,47 @@ export default function DashboardPage({ token, email, onLogout }) {
               <TableCell>Priority</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Environment</TableCell>
-              <TableCell align="center">Actions</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {bugs.length ? bugs.map(bug => (
-              <TableRow
-                key={bug.id}
-                hover
-                sx={{ bgcolor: bug.status === "resolved" || bug.status === "closed" ? "rgba(47,122,74,0.06)" : "transparent" }}
-              >
-                <TableCell>
-                  <Typography
-                    fontWeight={600}
-                    sx={{ cursor: "pointer", "&:hover": { textDecoration: "underline", color: "primary.main" } }}
-                    onClick={() => openBugDetail(bug)}
-                  >
-                    {bug.title}
-                  </Typography>
-                </TableCell>
+              <TableRow key={bug.id} hover sx={{ bgcolor: bug.status === "resolved" || bug.status === "closed" ? "rgba(47,122,74,0.06)" : "transparent" }}>
+                <TableCell><Typography fontWeight={600}>{bug.title}</Typography></TableCell>
                 <TableCell>#{bug.project_id}</TableCell>
                 <TableCell><Chip size="small" label={bug.severity} color={severityColor(bug.severity)} /></TableCell>
                 <TableCell><Chip size="small" label={bug.priority} color={priorityColor(bug.priority)} /></TableCell>
                 <TableCell><Chip size="small" label={bug.status} color={statusColor(bug.status)} /></TableCell>
                 <TableCell>{bug.environment || '-'}</TableCell>
-                <TableCell align="center">
-                  <Stack direction="row" spacing={0.5} justifyContent="center">
-                    <Tooltip title="View details">
-                      <IconButton size="small" onClick={() => openBugDetail(bug)}>
-                        <VisibilityRoundedIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={bug.status === "resolved" ? "Reopen" : "Mark resolved"}>
-                      <IconButton
-                        size="small"
-                        color={bug.status === "resolved" ? "warning" : "success"}
-                        onClick={() => handleResolveBug(bug.id, bug.status)}
-                        disabled={submitting === `bug-resolve-${bug.id}`}
-                      >
-                        {bug.status === "resolved"
-                          ? <ReplayRoundedIcon fontSize="small" />
-                          : <CheckCircleRoundedIcon fontSize="small" />
-                        }
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteBug(bug.id)}
-                        disabled={submitting === `bug-delete-${bug.id}`}
-                      >
-                        <DeleteRoundedIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                <TableCell>
+                  <Stack direction="row" spacing={0.5}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color={bug.status === "resolved" ? "warning" : "success"}
+                      onClick={() => handleResolveBug(bug.id, bug.status)}
+                      disabled={submitting === `bug-resolve-${bug.id}`}
+                    >
+                      {bug.status === "resolved" ? "Reopen" : "Resolve"}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => handleDeleteBug(bug.id)}
+                      disabled={submitting === `bug-delete-${bug.id}`}
+                    >
+                      Delete
+                    </Button>
                   </Stack>
                 </TableCell>
               </TableRow>
             )) : (
-              <TableRow><TableCell colSpan={7}>No bugs reported.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>No bugs reported.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
 
-        {/* ── Bug Detail / Edit Dialog ── */}
-        <Dialog open={bugDetailOpen} onClose={() => { setBugDetailOpen(false); setBugEditMode(false); }} maxWidth="md" fullWidth>
-          <DialogTitle>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="h6">{selectedBug?.title}</Typography>
-              <Stack direction="row" spacing={1}>
-                {!bugEditMode ? (
-                  <Tooltip title="Edit bug">
-                    <IconButton size="small" onClick={() => setBugEditMode(true)}>
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                ) : null}
-                {selectedBug && (
-                  <Tooltip title={selectedBug.status === "resolved" ? "Reopen" : "Mark resolved"}>
-                    <IconButton
-                      size="small"
-                      color={selectedBug.status === "resolved" ? "warning" : "success"}
-                      onClick={() => handleResolveBug(selectedBug.id, selectedBug.status)}
-                    >
-                      {selectedBug.status === "resolved"
-                        ? <ReplayRoundedIcon fontSize="small" />
-                        : <CheckCircleRoundedIcon fontSize="small" />
-                      }
-                    </IconButton>
-                  </Tooltip>
-                )}
-                {selectedBug && (
-                  <Tooltip title="Delete bug">
-                    <IconButton size="small" color="error" onClick={() => handleDeleteBug(selectedBug.id)}>
-                      <DeleteRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Stack>
-            </Box>
-          </DialogTitle>
-          <DialogContent dividers>
-            {selectedBug && (
-              <Grid container spacing={2}>
-                {/* Status chips row */}
-                <Grid item xs={12}>
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Chip size="small" label={selectedBug.status} color={statusColor(selectedBug.status)} />
-                    <Chip size="small" label={`Severity: ${selectedBug.severity}`} color={severityColor(selectedBug.severity)} />
-                    <Chip size="small" label={`Priority: ${selectedBug.priority}`} color={priorityColor(selectedBug.priority)} />
-                    {selectedBug.environment && <Chip size="small" label={selectedBug.environment} variant="outlined" />}
-                    {selectedBug.created_at && (
-                      <Chip size="small" label={`Reported: ${new Date(selectedBug.created_at).toLocaleDateString()}`} variant="outlined" />
-                    )}
-                  </Stack>
-                </Grid>
-
-                {bugEditMode ? (
-                  /* ── EDIT MODE ── */
-                  <>
-                    <Grid item xs={12}>
-                      <TextField fullWidth label="Title" value={bugEditForm.title} onChange={e => setBugEditForm(p => ({ ...p, title: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField fullWidth multiline rows={3} label="Description" value={bugEditForm.description} onChange={e => setBugEditForm(p => ({ ...p, description: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Severity</InputLabel>
-                        <Select value={bugEditForm.severity} label="Severity" onChange={e => setBugEditForm(p => ({ ...p, severity: e.target.value }))}>
-                          <MenuItem value="critical">Critical</MenuItem>
-                          <MenuItem value="high">High</MenuItem>
-                          <MenuItem value="medium">Medium</MenuItem>
-                          <MenuItem value="low">Low</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Priority</InputLabel>
-                        <Select value={bugEditForm.priority} label="Priority" onChange={e => setBugEditForm(p => ({ ...p, priority: e.target.value }))}>
-                          <MenuItem value="p1">P1 - Critical</MenuItem>
-                          <MenuItem value="p2">P2 - High</MenuItem>
-                          <MenuItem value="p3">P3 - Medium</MenuItem>
-                          <MenuItem value="p4">P4 - Low</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Status</InputLabel>
-                        <Select value={bugEditForm.status} label="Status" onChange={e => setBugEditForm(p => ({ ...p, status: e.target.value }))}>
-                          <MenuItem value="open">Open</MenuItem>
-                          <MenuItem value="in_progress">In Progress</MenuItem>
-                          <MenuItem value="resolved">Resolved</MenuItem>
-                          <MenuItem value="closed">Closed</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField fullWidth multiline rows={3} label="Steps to Reproduce" value={bugEditForm.steps_to_reproduce} onChange={e => setBugEditForm(p => ({ ...p, steps_to_reproduce: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField fullWidth label="Expected Behavior" value={bugEditForm.expected_behavior} onChange={e => setBugEditForm(p => ({ ...p, expected_behavior: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField fullWidth label="Actual Behavior" value={bugEditForm.actual_behavior} onChange={e => setBugEditForm(p => ({ ...p, actual_behavior: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <TextField fullWidth label="Environment" value={bugEditForm.environment} onChange={e => setBugEditForm(p => ({ ...p, environment: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <TextField fullWidth label="Browser" value={bugEditForm.browser} onChange={e => setBugEditForm(p => ({ ...p, browser: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <TextField fullWidth label="OS" value={bugEditForm.operating_system} onChange={e => setBugEditForm(p => ({ ...p, operating_system: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField fullWidth label="Assignee" value={bugEditForm.assignee} onChange={e => setBugEditForm(p => ({ ...p, assignee: e.target.value }))} />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField fullWidth label="Reporter" value={bugEditForm.reporter} onChange={e => setBugEditForm(p => ({ ...p, reporter: e.target.value }))} />
-                    </Grid>
-                  </>
-                ) : (
-                  /* ── VIEW MODE ── */
-                  <>
-                    {selectedBug.description && (
-                      <Grid item xs={12}>
-                        <Typography variant="caption" color="text.secondary">DESCRIPTION</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>{selectedBug.description}</Typography>
-                      </Grid>
-                    )}
-                    {selectedBug.steps_to_reproduce && (
-                      <Grid item xs={12}>
-                        <Typography variant="caption" color="text.secondary">STEPS TO REPRODUCE</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>{selectedBug.steps_to_reproduce}</Typography>
-                      </Grid>
-                    )}
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">EXPECTED BEHAVIOR</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.expected_behavior || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">ACTUAL BEHAVIOR</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.actual_behavior || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <Typography variant="caption" color="text.secondary">BROWSER</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.browser || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <Typography variant="caption" color="text.secondary">OPERATING SYSTEM</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.operating_system || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                      <Typography variant="caption" color="text.secondary">DEVICE</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.device || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">ASSIGNEE</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.assignee || "—"}</Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">REPORTER</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedBug.reporter || "—"}</Typography>
-                    </Grid>
-                    {selectedBug.resolved_at && (
-                      <Grid item xs={12}>
-                        <Typography variant="caption" color="text.secondary">RESOLVED AT</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>{new Date(selectedBug.resolved_at).toLocaleString()}</Typography>
-                      </Grid>
-                    )}
-                  </>
-                )}
-              </Grid>
-            )}
-          </DialogContent>
-          <DialogActions>
-            {bugEditMode ? (
-              <>
-                <Button onClick={() => setBugEditMode(false)}>Cancel</Button>
-                <Button variant="contained" onClick={handleSaveBugEdit} disabled={submitting === "bug-edit"}>
-                  {submitting === "bug-edit" ? "Saving..." : "Save Changes"}
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => { setBugDetailOpen(false); setBugEditMode(false); }}>Close</Button>
-            )}
-          </DialogActions>
-        </Dialog>
-
-        {/* ── Report Bug Dialog (unchanged) ── */}
         <Dialog open={bugDialogOpen} onClose={() => setBugDialogOpen(false)} maxWidth="md" fullWidth>
           <DialogTitle>Report Bug</DialogTitle>
           <DialogContent>
@@ -1826,6 +1598,7 @@ export default function DashboardPage({ token, email, onLogout }) {
           <Stack direction="row" spacing={2} alignItems="center">
             <Button variant="outlined" startIcon={<GroupRoundedIcon />} onClick={() => { setViewingClientDetail(false); setSelectedClient(null); }}>Back to Clients</Button>
             <Typography variant="h4">{selectedClient.name}</Typography>
+            <Button variant="contained" color="secondary" size="small" onClick={() => handleGenerateMagicLink(selectedClient.id)} disabled={submitting === "magic-link"}>Portal Link</Button>
           </Stack>
           <Chip label={selectedClient.status} color={statusColor(selectedClient.status)} />
         </Box>
@@ -1939,6 +1712,42 @@ export default function DashboardPage({ token, email, onLogout }) {
     }
   }
 
+
+  function renderMagicLinkDialog() {
+    return (
+      <Dialog open={magicLinkDialogOpen} onClose={() => setMagicLinkDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: "bold" }}>Magic Link Generated</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            A magic link has been generated for <strong>{magicLinkData?.clientName}</strong>. 
+            Share this link and the password below with them.
+          </Typography>
+          <Box sx={{ mt: 3, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary">PORTAL URL (expires in 30 days)</Typography>
+            <Typography variant="body2" sx={{ wordBreak: "break-all", mb: 2, fontWeight: "bold", color: "primary.main" }}>
+              {magicLinkData?.url}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">SYSTEM PASSWORD</Typography>
+            <Typography variant="h5" sx={{ letterSpacing: 2, fontWeight: "bold", color: "secondary.main" }}>
+              {magicLinkData?.password}
+            </Typography>
+          </Box>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            The client must provide both their <strong>phone number</strong> and this <strong>password</strong> to log in.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            navigator.clipboard.writeText(`Portal Link: ${magicLinkData?.url}\nPassword: ${magicLinkData?.password}`);
+            notify("Link and password copied to clipboard!");
+          }}>Copy All</Button>
+          <Button onClick={() => setMagicLinkDialogOpen(false)} variant="contained">Done</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+
   return (
     <AppShell sections={sectionConfig} activeSection={section} onSectionChange={setSection} title="ACTIVA" subtitle="Operations Deck" userEmail={email} onLogout={onLogout}>
       <Stack spacing={3}>
@@ -1958,15 +1767,16 @@ export default function DashboardPage({ token, email, onLogout }) {
         </Box>
 
         {loading ? (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 4, justifyContent: "center" }}>
-            <LoadingIcon size={80} />
-            <Typography variant="h6" color="text.secondary">Initializing Workspace...</Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2">Loading workspace data...</Typography>
           </Box>
         ) : null}
 
         {error ? <Alert severity="error">{error}</Alert> : null}
 
         {renderBody()}
+        {renderMagicLinkDialog()}
       </Stack>
 
       <Snackbar open={snack.open} autoHideDuration={2600} onClose={() => setSnack(p => ({ ...p, open: false }))}>

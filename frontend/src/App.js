@@ -2,10 +2,25 @@ import { CssBaseline, ThemeProvider } from "@mui/material";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import DashboardPage from "./pages/DashboardPage";
 import AuthPage from "./pages/AuthPage";
+import ClientLoginPage from "./pages/ClientLoginPage";
+import ClientBugDashboard from "./pages/ClientBugDashboard";
+import { PortalAuthProvider, usePortalAuth } from "./contexts/PortalAuthContext";
 import theme from "./theme";
 
 function AppContent() {
   const { isAuthenticated, token, email, logout } = useAuth();
+  const { isAuthenticated: isPortalAuthenticated, logout: portalLogout } = usePortalAuth();
+
+  // Simple "routing": If URL has ?token=, we are in the Client Portal
+  const urlParams = new URLSearchParams(window.location.search);
+  const portalToken = urlParams.get("token");
+
+  if (portalToken) {
+    if (!isPortalAuthenticated) {
+      return <ClientLoginPage />;
+    }
+    return <ClientBugDashboard onLogout={portalLogout} />;
+  }
 
   if (!isAuthenticated) {
     return <AuthPage />;
@@ -19,7 +34,9 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <AppContent />
+        <PortalAuthProvider>
+          <AppContent />
+        </PortalAuthProvider>
       </AuthProvider>
     </ThemeProvider>
   );

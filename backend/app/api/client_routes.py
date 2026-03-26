@@ -299,3 +299,19 @@ def export_client(
         "communications": client.communications,
         "projects": client.projects
     }
+
+
+@router.post("/{client_id}/generate-magic-link", response_model=ClientResponse)
+def generate_magic_link(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate a magic link for a client with ownership check"""
+    client = client_crud.get_client(db, client_id)
+    if not client or client.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    updated_client = client_crud.generate_magic_link(db, client_id)
+    return updated_client
+

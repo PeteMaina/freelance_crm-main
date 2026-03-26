@@ -52,6 +52,11 @@ class Client(Base):
     payment_terms = Column(String, default="net30")  # net15, net30, net45, etc.
     average_project_value = Column(Float, default=0)
 
+    # Magic Link Portal fields
+    magic_link_token = Column(String, unique=True, index=True, nullable=True)
+    magic_link_password = Column(String, nullable=True) # Plain text for simplicity as requested, or hashed if preferred.
+    magic_link_expires_at = Column(DateTime, nullable=True)
+
     # Relationship: One client -> Many projects
     projects = relationship("Project", back_populates="client", cascade="all, delete")
     contacts = relationship("ClientContact", back_populates="client", cascade="all, delete")

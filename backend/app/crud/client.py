@@ -1,5 +1,9 @@
 from sqlalchemy.orm import Session
 from app.models.models import Client, ClientContact, ClientContract, Invoice, Communication
+import uuid
+import secrets
+import string
+from datetime import timedelta
 from app.schemas.client import (
     ClientCreate, ClientUpdate, ClientContactCreate, ClientContractCreate,
     InvoiceCreate, CommunicationCreate
@@ -231,4 +235,34 @@ def get_client_metrics(db: Session, client_id: int) -> dict:
         "communication_count": comm_count,
         "average_project_value": total_revenue_sum / project_count if project_count > 0 else 0
     }
+
+
+def generate_magic_link(db: Session, client_id: int) -> Optional[Client]:
+    """Generate a unique magic link token and password for a client, valid for 30 days"""
+    client = get_client(db, client_id)
+    if not client:
+        return None
+    
+    # Generate unique token
+    client.magic_link_token = str(uuid.uuid4())
+    
+    # Generate a readable 8-character password (letters and digits)
+    alphabet = string.ascii_letters + string.digits
+    client.magic_link_password = ''.join(secrets.choice(alphabet) for _ in range(8))
+    
+    # Set expiration to 30 days from now
+    client.magic_link_expires_at = datetime.utcnow() + timedelta(days=30)
+    
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+def get_client_by_token(db: Session, token: str) -> Optional[Client]:
+    """Retrieve client by magic link token if not expired"""
+    client = db.query(Client).filter(Client.magic_link_token == token).first()
+    if client and client.magic_link_expires_at and client.magic_link_expires_at > datetime.utcnow():
+        return client
+    return None
+
 

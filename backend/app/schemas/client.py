@@ -142,6 +142,10 @@ class ClientUpdate(BaseModel):
     communication_frequency: Optional[int] = None
     contract_expiry: Optional[date] = None
     custom_fields: Optional[str] = None
+    # Magic Link fields
+    magic_link_token: Optional[str] = None
+    magic_link_password: Optional[str] = None
+    magic_link_expires_at: Optional[datetime] = None
 
 
 class ClientResponse(ClientBase):
@@ -158,6 +162,9 @@ class ClientResponse(ClientBase):
     last_contacted: Optional[datetime] = None
     contract_expiry: Optional[date] = None
     custom_fields: Optional[str] = None
+    magic_link_token: Optional[str] = None
+    magic_link_expires_at: Optional[datetime] = None
+    # magic_link_password intentionally omitted from response for security
 
     class Config:
         from_attributes = True
@@ -170,4 +177,11 @@ class ClientDetailResponse(ClientResponse):
 
     class Config:
         from_attributes = True
+
+
+class ClientPortalLogin(BaseModel):
+    token: str
+    phone: str
+    password: str
+
 

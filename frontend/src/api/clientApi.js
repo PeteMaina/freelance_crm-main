@@ -99,3 +99,8 @@ export async function deleteCommunication(commId, token) {
   return request(`/clients/communications/${commId}`, { method: "DELETE", token });
 }
 
+export async function generateMagicLink(clientId, token) {
+  return request(`/clients/${clientId}/generate-magic-link`, { method: "POST", token });
+}
+
+
