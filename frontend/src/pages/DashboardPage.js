@@ -64,10 +64,6 @@ import KpiCard from "../components/KpiCard";
 import SectionFrame from "../components/SectionFrame";
 import DatePickerField from "../components/DatePickerField";
 import ProgressEditor from "../components/ProgressEditor";
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
 
 const sectionConfig = [
   { key: "overview", label: "Overview", hint: "Health indicators" },

@@ -55,7 +55,7 @@ export default function ClientLoginPage() {
     setSubmitting(true);
     try {
       const data = await loginPortal({ token, phone, password });
-      login(data);
+      login({ ...data, magic_link_token: token });
     } catch (err) {
       setError(err.message);
     } finally {

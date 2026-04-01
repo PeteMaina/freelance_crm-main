@@ -9,14 +9,19 @@ import theme from "./theme";
 
 function AppContent() {
   const { isAuthenticated, token, email, logout } = useAuth();
-  const { isAuthenticated: isPortalAuthenticated, logout: portalLogout } = usePortalAuth();
+  const {
+    isAuthenticated: isPortalAuthenticated,
+    magicLinkToken,
+    logout: portalLogout
+  } = usePortalAuth();
 
   // Simple "routing": If URL has ?token=, we are in the Client Portal
   const urlParams = new URLSearchParams(window.location.search);
   const portalToken = urlParams.get("token");
+  const hasMatchingPortalSession = isPortalAuthenticated && magicLinkToken === portalToken;
 
   if (portalToken) {
-    if (!isPortalAuthenticated) {
+    if (!hasMatchingPortalSession) {
       return <ClientLoginPage />;
     }
     return <ClientBugDashboard onLogout={portalLogout} />;
