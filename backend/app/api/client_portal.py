@@ -4,14 +4,14 @@ from typing import List, Optional
 from app.database import get_db
 from app.crud import client as client_crud
 from app.crud import project as project_crud
-from app.schemas.client import ClientPortalLogin, ClientResponse
+from app.schemas.client import ClientPortalLogin, ClientPortalTokenCheckResponse
 from app.schemas.project import ProjectResponse, BugResponse, BugCreate
 from app.core.security import create_access_token, get_current_client
 from app.models.models import Client
 
 router = APIRouter(prefix="/portal", tags=["Client Portal"])
 
-@router.get("/check-token/{token}")
+@router.get("/check-token/{token}", response_model=ClientPortalTokenCheckResponse)
 def check_token(token: str, db: Session = Depends(get_db)):
     """Check if a magic link token is valid and not expired"""
     client = client_crud.get_client_by_token(db, token)
@@ -20,7 +20,11 @@ def check_token(token: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid or expired magic link"
         )
-    return {"status": "valid", "client_name": client.name}
+    return {
+        "status": "valid",
+        "client_name": client.name,
+        "client_phone": client.phone,
+    }
 
 @router.post("/login")
 def portal_login(login_data: ClientPortalLogin, db: Session = Depends(get_db)):

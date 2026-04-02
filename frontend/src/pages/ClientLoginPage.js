@@ -19,6 +19,7 @@ export default function ClientLoginPage() {
   const [token, setToken] = useState("");
   const [clientName, setClientName] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneFetched, setPhoneFetched] = useState(false);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,10 @@ export default function ClientLoginPage() {
     checkPortalToken(t)
       .then((res) => {
         setClientName(res.client_name);
+        if (res.client_phone) {
+          setPhone(res.client_phone);
+          setPhoneFetched(true);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -103,6 +108,7 @@ export default function ClientLoginPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
+              helperText={phoneFetched ? "We fetched the phone number linked to this portal access for you." : ""}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">

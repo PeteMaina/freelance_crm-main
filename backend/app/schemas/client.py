@@ -175,8 +175,23 @@ class ClientDetailResponse(ClientResponse):
     contracts: List[ClientContractResponse] = []
     invoices: List[InvoiceResponse] = []
 
-    class Config:
+class Config:
         from_attributes = True
+
+
+class MagicLinkResponse(BaseModel):
+    client_id: int
+    client_name: str
+    phone: Optional[str] = None
+    magic_link_token: str
+    magic_link_password: str
+    magic_link_expires_at: datetime
+
+
+class ClientPortalTokenCheckResponse(BaseModel):
+    status: str
+    client_name: str
+    client_phone: Optional[str] = None
 
 
 class ClientPortalLogin(BaseModel):

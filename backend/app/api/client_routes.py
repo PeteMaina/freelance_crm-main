@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.crud import client as client_crud
 from app.schemas.client import (
-    ClientCreate, ClientUpdate, ClientResponse, ClientDetailResponse,
+    ClientCreate, ClientUpdate, ClientResponse, ClientDetailResponse, MagicLinkResponse,
     ClientContactCreate, ClientContactResponse,
     ClientContractCreate, ClientContractResponse,
     InvoiceCreate, InvoiceResponse,
@@ -301,7 +301,7 @@ def export_client(
     }
 
 
-@router.post("/{client_id}/generate-magic-link", response_model=ClientResponse)
+@router.post("/{client_id}/generate-magic-link", response_model=MagicLinkResponse)
 def generate_magic_link(
     client_id: int,
     db: Session = Depends(get_db),
@@ -313,5 +313,12 @@ def generate_magic_link(
         raise HTTPException(status_code=404, detail="Client not found")
     
     updated_client = client_crud.generate_magic_link(db, client_id)
-    return updated_client
+    return {
+        "client_id": updated_client.id,
+        "client_name": updated_client.name,
+        "phone": updated_client.phone,
+        "magic_link_token": updated_client.magic_link_token,
+        "magic_link_password": updated_client.magic_link_password,
+        "magic_link_expires_at": updated_client.magic_link_expires_at,
+    }
 

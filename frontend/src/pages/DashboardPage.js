@@ -226,6 +226,8 @@ export default function DashboardPage({ token, email, onLogout }) {
   const [editTask, setEditTask] = useState(null);
   const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
   const [bugDialogOpen, setBugDialogOpen] = useState(false);
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState(null);
+  const [selectedBugDetail, setSelectedBugDetail] = useState(null);
 
   const [snack, setSnack] = useState({
     open: false,
@@ -284,10 +286,52 @@ export default function DashboardPage({ token, email, onLogout }) {
     return result;
   }, [tasks, searchQuery, filterStatus, filterPriority]);
 
+  const filteredBugs = useMemo(() => {
+    let result = bugs;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(b =>
+        b.title?.toLowerCase().includes(query) ||
+        b.description?.toLowerCase().includes(query) ||
+        b.reporter?.toLowerCase().includes(query)
+      );
+    }
+    if (filterStatus) {
+      result = result.filter(b => b.status === filterStatus);
+    }
+    if (filterPriority) {
+      result = result.filter(b => b.severity === filterPriority);
+    }
+    if (selectedProjectId) {
+      result = result.filter(b => b.project_id === Number(selectedProjectId));
+    }
+    return result;
+  }, [bugs, searchQuery, filterStatus, filterPriority, selectedProjectId]);
+
   const selectedProjectCalls = useMemo(() => {
     if (!selectedProjectId) return [];
     return callsByProject[selectedProjectId] || [];
   }, [callsByProject, selectedProjectId]);
+
+  const projectLookup = useMemo(
+    () => new Map(projects.map(project => [project.id, project])),
+    [projects]
+  );
+
+  const clientLookup = useMemo(
+    () => new Map(clients.map(client => [client.id, client])),
+    [clients]
+  );
+
+  const selectedProject = useMemo(() => {
+    if (!selectedProjectId) return null;
+    return projectLookup.get(Number(selectedProjectId)) || null;
+  }, [selectedProjectId, projectLookup]);
+
+  const selectedBugPortalClient = useMemo(() => {
+    if (!selectedProject?.client_id) return null;
+    return clientLookup.get(selectedProject.client_id) || null;
+  }, [selectedProject, clientLookup]);
 
   const metrics = useMemo(() => {
     const activeProjects = projects.filter(p => String(p.status || "").toLowerCase().includes("active")).length;
@@ -326,7 +370,25 @@ export default function DashboardPage({ token, email, onLogout }) {
     setSnack({ open: true, severity, message });
   }
 
-  const handleGenerateMagicLink = async (clientId) => {
+  function getProjectTitle(projectId) {
+    if (!projectId) return "Unassigned";
+    return projectLookup.get(Number(projectId))?.title || `Project #${projectId}`;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "-";
+    return new Date(value).toLocaleString();
+  }
+
+  function openTaskDetail(task) {
+    setSelectedTaskDetail(task);
+  }
+
+  function openBugDetail(bug) {
+    setSelectedBugDetail(bug);
+  }
+
+  const handleGenerateMagicLink = async (clientId, options = {}) => {
     setSubmitting("magic-link");
     try {
       const updatedClient = await generateMagicLink(clientId, token);
@@ -334,7 +396,9 @@ export default function DashboardPage({ token, email, onLogout }) {
       setMagicLinkData({
         url: portalUrl,
         password: updatedClient.magic_link_password,
-        clientName: updatedClient.name
+        clientName: updatedClient.client_name || updatedClient.name,
+        phone: updatedClient.phone || options.phone || "",
+        projectTitle: options.projectTitle || ""
       });
       setMagicLinkDialogOpen(true);
       await hydrate();
@@ -907,7 +971,6 @@ export default function DashboardPage({ token, email, onLogout }) {
                   </Box>
                   <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: "wrap" }}>
                     <Button size="small" variant="outlined" onClick={() => { setSelectedClient(client); setViewingClientDetail(true); }}>View Details</Button>
-                    <Button size="small" variant="outlined" color="secondary" onClick={() => handleGenerateMagicLink(client.id)} disabled={submitting === "magic-link"}>Magic Link</Button>
                     <Button size="small" onClick={() => openEditClient(client)}>Edit</Button>
                     <Button size="small" color="error" onClick={() => handleDeleteClient(client.id)}>Delete</Button>
                   </Box>
@@ -1197,9 +1260,17 @@ export default function DashboardPage({ token, email, onLogout }) {
           </TableHead>
           <TableBody>
             {filteredTasks.length ? filteredTasks.map(task => (
-              <TableRow key={task.id} hover sx={{ bgcolor: task.is_completed ? 'rgba(47,122,74,0.08)' : 'transparent' }}>
+              <TableRow
+                key={task.id}
+                hover
+                onClick={() => openTaskDetail(task)}
+                sx={{
+                  bgcolor: task.is_completed ? 'rgba(47,122,74,0.08)' : 'transparent',
+                  cursor: "pointer"
+                }}
+              >
                 <TableCell><Typography fontWeight={600}>{task.title}</Typography></TableCell>
-                <TableCell>#{task.project_id}</TableCell>
+                <TableCell>{getProjectTitle(task.project_id)}</TableCell>
                 <TableCell><Chip size="small" label={task.status} color={statusColor(task.status)} /></TableCell>
                 <TableCell><Chip size="small" label={task.priority} color={priorityColor(task.priority)} /></TableCell>
                 <TableCell>{task.due_date || '-'}</TableCell>
@@ -1207,7 +1278,14 @@ export default function DashboardPage({ token, email, onLogout }) {
                   <LinearProgress variant="determinate" value={task.progress || 0} sx={{ height: 6, borderRadius: 5 }} />
                 </TableCell>
                 <TableCell>
-                  <Button size="small" onClick={() => handleToggleTask(task.id)} disabled={submitting === `task-toggle-${task.id}`}>
+                  <Button
+                    size="small"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleToggleTask(task.id);
+                    }}
+                    disabled={submitting === `task-toggle-${task.id}`}
+                  >
                     {task.is_completed ? "Reopen" : "Complete"}
                   </Button>
                 </TableCell>
@@ -1265,6 +1343,52 @@ export default function DashboardPage({ token, email, onLogout }) {
             <Button onClick={handleTaskSubmit} variant="contained" disabled={submitting === "task"}>
               {submitting === "task" ? "Saving..." : "Create"}
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={!!selectedTaskDetail} onClose={() => setSelectedTaskDetail(null)} maxWidth="md" fullWidth>
+          <DialogTitle>{selectedTaskDetail?.title || "Task Details"}</DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Chip size="small" label={getProjectTitle(selectedTaskDetail?.project_id)} />
+                <Chip size="small" label={selectedTaskDetail?.status || "unknown"} color={statusColor(selectedTaskDetail?.status)} />
+                <Chip size="small" label={selectedTaskDetail?.priority || "unknown"} color={priorityColor(selectedTaskDetail?.priority)} />
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">DESCRIPTION</Typography>
+                <Typography variant="body1">{selectedTaskDetail?.description || "No description provided."}</Typography>
+              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">ASSIGNEE</Typography>
+                  <Typography variant="body2">{selectedTaskDetail?.assignee || "Unassigned"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">TAGS</Typography>
+                  <Typography variant="body2">{selectedTaskDetail?.tags || "No tags"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">START DATE</Typography>
+                  <Typography variant="body2">{selectedTaskDetail?.start_date || "-"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">DUE DATE</Typography>
+                  <Typography variant="body2">{selectedTaskDetail?.due_date || "-"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">ESTIMATED HOURS</Typography>
+                  <Typography variant="body2">{selectedTaskDetail?.estimated_hours ?? "-"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">PROGRESS</Typography>
+                  <Typography variant="body2">{selectedTaskDetail?.progress ?? 0}%</Typography>
+                </Grid>
+              </Grid>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSelectedTaskDetail(null)} variant="contained">Close</Button>
           </DialogActions>
         </Dialog>
       </Stack>
@@ -1352,10 +1476,23 @@ export default function DashboardPage({ token, email, onLogout }) {
     return (
       <Stack spacing={3}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h5">Bugs ({bugs.length})</Typography>
-          <Button variant="contained" startIcon={<BugReportRoundedIcon />} onClick={() => { setBugForm(defaultBugForm); setBugDialogOpen(true); }} disabled={!projects.length}>
-            Report Bug
-          </Button>
+          <Typography variant="h5">Bugs ({filteredBugs.length})</Typography>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={() => handleGenerateMagicLink(selectedProject.client_id, {
+                phone: selectedBugPortalClient?.phone,
+                projectTitle: selectedProject?.title || ""
+              })}
+              disabled={!selectedProject?.client_id || submitting === "magic-link"}
+            >
+              Generate Portal Link
+            </Button>
+            <Button variant="contained" startIcon={<BugReportRoundedIcon />} onClick={() => { setBugForm(defaultBugForm); setBugDialogOpen(true); }} disabled={!projects.length}>
+              Report Bug
+            </Button>
+          </Stack>
         </Box>
 
         <Grid container spacing={2}>
@@ -1386,6 +1523,22 @@ export default function DashboardPage({ token, email, onLogout }) {
               </Select>
             </FormControl>
           </Grid>
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Project</InputLabel>
+              <Select value={selectedProjectId} label="Project" onChange={e => setSelectedProjectId(e.target.value)}>
+                <MenuItem value="">All Projects</MenuItem>
+                {projects.map(p => <MenuItem key={p.id} value={String(p.id)}>{p.title}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12}>
+            <Typography variant="caption" color="text.secondary">
+              {selectedProject?.client_id
+                ? `Portal link target: ${selectedBugPortalClient?.name || "Linked project client"} (${selectedBugPortalClient?.phone || "Phone will be fetched from the server"})`
+                : "Select a project linked to a client to generate a portal link."}
+            </Typography>
+          </Grid>
         </Grid>
 
         <Table>
@@ -1401,10 +1554,18 @@ export default function DashboardPage({ token, email, onLogout }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {bugs.length ? bugs.map(bug => (
-              <TableRow key={bug.id} hover sx={{ bgcolor: bug.status === "resolved" || bug.status === "closed" ? "rgba(47,122,74,0.06)" : "transparent" }}>
+            {filteredBugs.length ? filteredBugs.map(bug => (
+              <TableRow
+                key={bug.id}
+                hover
+                onClick={() => openBugDetail(bug)}
+                sx={{
+                  bgcolor: bug.status === "resolved" || bug.status === "closed" ? "rgba(47,122,74,0.06)" : "transparent",
+                  cursor: "pointer"
+                }}
+              >
                 <TableCell><Typography fontWeight={600}>{bug.title}</Typography></TableCell>
-                <TableCell>#{bug.project_id}</TableCell>
+                <TableCell>{getProjectTitle(bug.project_id)}</TableCell>
                 <TableCell><Chip size="small" label={bug.severity} color={severityColor(bug.severity)} /></TableCell>
                 <TableCell><Chip size="small" label={bug.priority} color={priorityColor(bug.priority)} /></TableCell>
                 <TableCell><Chip size="small" label={bug.status} color={statusColor(bug.status)} /></TableCell>
@@ -1415,7 +1576,10 @@ export default function DashboardPage({ token, email, onLogout }) {
                       size="small"
                       variant="outlined"
                       color={bug.status === "resolved" ? "warning" : "success"}
-                      onClick={() => handleResolveBug(bug.id, bug.status)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleResolveBug(bug.id, bug.status);
+                      }}
                       disabled={submitting === `bug-resolve-${bug.id}`}
                     >
                       {bug.status === "resolved" ? "Reopen" : "Resolve"}
@@ -1424,7 +1588,10 @@ export default function DashboardPage({ token, email, onLogout }) {
                       size="small"
                       variant="outlined"
                       color="error"
-                      onClick={() => handleDeleteBug(bug.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDeleteBug(bug.id);
+                      }}
                       disabled={submitting === `bug-delete-${bug.id}`}
                     >
                       Delete
@@ -1433,7 +1600,7 @@ export default function DashboardPage({ token, email, onLogout }) {
                 </TableCell>
               </TableRow>
             )) : (
-              <TableRow><TableCell colSpan={6}>No bugs reported.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7}>No bugs reported.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -1494,6 +1661,66 @@ export default function DashboardPage({ token, email, onLogout }) {
             <Button onClick={handleBugSubmit} variant="contained" disabled={submitting === "bug"}>
               {submitting === "bug" ? "Saving..." : "Report Bug"}
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={!!selectedBugDetail} onClose={() => setSelectedBugDetail(null)} maxWidth="md" fullWidth>
+          <DialogTitle>{selectedBugDetail?.title || "Bug Details"}</DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Chip size="small" label={getProjectTitle(selectedBugDetail?.project_id)} />
+                <Chip size="small" label={selectedBugDetail?.severity || "unknown"} color={severityColor(selectedBugDetail?.severity)} />
+                <Chip size="small" label={selectedBugDetail?.priority || "unknown"} color={priorityColor(selectedBugDetail?.priority)} />
+                <Chip size="small" label={selectedBugDetail?.status || "unknown"} color={statusColor(selectedBugDetail?.status)} />
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">DESCRIPTION</Typography>
+                <Typography variant="body1">{selectedBugDetail?.description || "No description provided."}</Typography>
+              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">ENVIRONMENT</Typography>
+                  <Typography variant="body2">{selectedBugDetail?.environment || "-"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">REPORTER</Typography>
+                  <Typography variant="body2">{selectedBugDetail?.reporter || "-"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">ASSIGNEE</Typography>
+                  <Typography variant="body2">{selectedBugDetail?.assignee || "Unassigned"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">CREATED</Typography>
+                  <Typography variant="body2">{formatDateTime(selectedBugDetail?.created_at)}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">BROWSER</Typography>
+                  <Typography variant="body2">{selectedBugDetail?.browser || "-"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">OPERATING SYSTEM</Typography>
+                  <Typography variant="body2">{selectedBugDetail?.operating_system || "-"}</Typography>
+                </Grid>
+              </Grid>
+              <Divider />
+              <Box>
+                <Typography variant="caption" color="text.secondary">STEPS TO REPRODUCE</Typography>
+                <Typography variant="body2">{selectedBugDetail?.steps_to_reproduce || "No steps provided."}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">EXPECTED BEHAVIOR</Typography>
+                <Typography variant="body2">{selectedBugDetail?.expected_behavior || "Not provided."}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">ACTUAL BEHAVIOR</Typography>
+                <Typography variant="body2">{selectedBugDetail?.actual_behavior || "Not provided."}</Typography>
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSelectedBugDetail(null)} variant="contained">Close</Button>
           </DialogActions>
         </Dialog>
       </Stack>
@@ -1594,7 +1821,6 @@ export default function DashboardPage({ token, email, onLogout }) {
           <Stack direction="row" spacing={2} alignItems="center">
             <Button variant="outlined" startIcon={<GroupRoundedIcon />} onClick={() => { setViewingClientDetail(false); setSelectedClient(null); }}>Back to Clients</Button>
             <Typography variant="h4">{selectedClient.name}</Typography>
-            <Button variant="contained" color="secondary" size="small" onClick={() => handleGenerateMagicLink(selectedClient.id)} disabled={submitting === "magic-link"}>Portal Link</Button>
           </Stack>
           <Chip label={selectedClient.status} color={statusColor(selectedClient.status)} />
         </Box>
@@ -1718,6 +1944,16 @@ export default function DashboardPage({ token, email, onLogout }) {
             A magic link has been generated for <strong>{magicLinkData?.clientName}</strong>.
             Share this link and the password below with them.
           </Typography>
+          <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">PROJECT</Typography>
+              <Typography variant="body2">{magicLinkData?.projectTitle || "Client Portal"}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">CLIENT PHONE</Typography>
+              <Typography variant="body2">{magicLinkData?.phone || "No phone on file"}</Typography>
+            </Box>
+          </Box>
           <Box sx={{ mt: 3, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
             <Typography variant="caption" color="text.secondary">PORTAL URL (expires in 30 days)</Typography>
             <Typography variant="body2" sx={{ wordBreak: "break-all", mb: 2, fontWeight: "bold", color: "primary.main" }}>
@@ -1734,7 +1970,9 @@ export default function DashboardPage({ token, email, onLogout }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => {
-            navigator.clipboard.writeText(`Portal Link: ${magicLinkData?.url}\nPassword: ${magicLinkData?.password}`);
+            navigator.clipboard.writeText(
+              `Project: ${magicLinkData?.projectTitle || "Client Portal"}\nClient: ${magicLinkData?.clientName}\nPhone: ${magicLinkData?.phone || "N/A"}\nPortal Link: ${magicLinkData?.url}\nPassword: ${magicLinkData?.password}`
+            );
             notify("Link and password copied to clipboard!");
           }}>Copy All</Button>
           <Button onClick={() => setMagicLinkDialogOpen(false)} variant="contained">Done</Button>
