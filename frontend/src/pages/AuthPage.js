@@ -24,6 +24,7 @@ import {
 import { useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../api/http";
+import GlobalFooter from "../components/GlobalFooter";
 
 const defaultFields = {
   email: "",
@@ -37,6 +38,8 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [authSuccess, setAuthSuccess] = useState(false);
 
@@ -58,10 +61,16 @@ export default function AuthPage() {
           setBusy(false);
           return;
         }
+        if (fields.password !== confirmPassword) {
+          setError("Passwords do not match.");
+          setBusy(false);
+          return;
+        }
         await register(fields);
       }
       setAuthSuccess(true);
       setFields(defaultFields);
+      setConfirmPassword("");
       // Brief delay to show animation before redirect (login function usually redirects, 
       // but if it's external, we might need a signal or just wait if logic allows.
       // Assuming login/register from context updates state which causes parent to show dashboard.
@@ -73,7 +82,8 @@ export default function AuthPage() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 3, md: 8 } }}>
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 8 }, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
           <Paper
@@ -128,6 +138,7 @@ export default function AuthPage() {
               onChange={(_, value) => {
                 setMode(value);
                 setError("");
+                setConfirmPassword("");
               }}
               sx={{ mb: 3 }}
             >
@@ -190,6 +201,24 @@ export default function AuthPage() {
                   }}
                 />
                 {mode === "register" && (
+                  <TextField
+                    required
+                    label="Confirm Password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(event) =>
+                      setConfirmPassword(event.target.value)
+                    }
+                    InputProps={{
+                      endAdornment: (
+                        <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end">
+                          {showConfirmPassword ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
+                        </IconButton>
+                      )
+                    }}
+                  />
+                )}
+                {mode === "register" && (
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -244,6 +273,8 @@ export default function AuthPage() {
           </Box>
         </Box>
       )}
-    </Container>
+      </Container>
+      <GlobalFooter />
+    </Box>
   );
 }

@@ -28,6 +28,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { listNotifications, markAsRead } from "../api/notificationApi";
+import GlobalFooter from "./GlobalFooter";
 
 export default function AppShell({
   sections,
@@ -125,7 +126,7 @@ export default function AppShell({
         backdropFilter: 'blur(4px)',
         textAlign: 'center'
       }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center" sx={{ mb: 1.5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center">
           <Avatar sx={{ bgcolor: "primary.main", width: 30, height: 30, fontSize: '0.9rem' }}>
             {userEmail ? userEmail.charAt(0).toUpperCase() : "U"}
           </Avatar>
@@ -142,31 +143,6 @@ export default function AppShell({
             </Typography>
           </Box>
         </Stack>
-
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: '#8b9b75', letterSpacing: '0.05em', fontFamily: "'IBM Plex Mono', monospace" }}>
-            © {new Date().getFullYear()} ACTIVA
-          </Typography> For more info contact
-          <Typography
-            variant="caption"
-            component="a"
-            href="https://mainapeter.netlify.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              color: 'text.secondary',
-              textDecoration: 'none',
-              fontWeight: 700,
-              fontSize: '0.7rem',
-              '&:hover': { color: '#8b9b75' }
-            }}
-          >
-            Peter Maina <OpenInNewRoundedIcon sx={{ fontSize: '0.7rem' }} />
-          </Typography>
-        </Box>
       </Box>
     </Box>
   );
@@ -189,7 +165,7 @@ export default function AppShell({
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 280 }}>{navContent}</Box>
       </Drawer>
-      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+      <Box sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <AppBar
           position="sticky"
           elevation={0}
@@ -278,7 +254,8 @@ export default function AppShell({
             </Button>
           </Toolbar>
         </AppBar>
-        <Box sx={{ p: { xs: 2, md: 4 } }}>{children}</Box>
+        <Box sx={{ p: { xs: 2, md: 4 }, flexGrow: 1 }}>{children}</Box>
+        <GlobalFooter />
       </Box>
     </Box>
   );

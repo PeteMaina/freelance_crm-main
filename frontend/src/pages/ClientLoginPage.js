@@ -14,6 +14,7 @@ import {
 import { Visibility, VisibilityOff, Phone, Lock } from "@mui/icons-material";
 import { checkPortalToken, loginPortal } from "../api/portalApi";
 import { usePortalAuth } from "../contexts/PortalAuthContext";
+import GlobalFooter from "../components/GlobalFooter";
 
 export default function ClientLoginPage() {
   const [token, setToken] = useState("");
@@ -77,7 +78,8 @@ export default function ClientLoginPage() {
   }
 
   return (
-    <Container maxWidth="sm">
+    <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <Container maxWidth="sm" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <Box sx={{ mt: 8, mb: 4 }}>
         <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
           <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: "bold", color: "primary.main" }}>
@@ -159,5 +161,7 @@ export default function ClientLoginPage() {
         </Paper>
       </Box>
     </Container>
+    <GlobalFooter />
+  </Box>
   );
 }

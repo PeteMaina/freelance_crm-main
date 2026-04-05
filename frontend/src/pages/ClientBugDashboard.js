@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import GlobalFooter from "../components/GlobalFooter";
 import {
   Box,
   Container,
@@ -109,7 +110,7 @@ export default function ClientBugDashboard() {
   };
 
   return (
-    <Box sx={{ bgcolor: "#f5f7fa", minHeight: "100vh" }}>
+    <Box sx={{ bgcolor: "#f5f7fa", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <Box sx={{ bgcolor: "primary.main", color: "white", py: 4, mb: 4, boxShadow: 2 }}>
         <Container maxWidth="lg">
@@ -131,7 +132,7 @@ export default function ClientBugDashboard() {
         </Container>
       </Box>
 
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ flexGrow: 1, pb: 4 }}>
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
@@ -284,6 +285,7 @@ export default function ClientBugDashboard() {
           </Button>
         </DialogActions>
       </Dialog>
+      <GlobalFooter />
     </Box>
   );
 }
