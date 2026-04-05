@@ -6,6 +6,8 @@ import ClientLoginPage from "./pages/ClientLoginPage";
 import ClientBugDashboard from "./pages/ClientBugDashboard";
 import { PortalAuthProvider, usePortalAuth } from "./contexts/PortalAuthContext";
 import theme from "./theme";
+import LandingPage from "./pages/LandingPage";
+import { useState, useEffect } from "react";
 
 function AppContent() {
   const { isAuthenticated, token, email, logout } = useAuth();
@@ -20,6 +22,13 @@ function AppContent() {
   const portalToken = urlParams.get("token");
   const hasMatchingPortalSession = isPortalAuthenticated && magicLinkToken === portalToken;
 
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const handleHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   if (portalToken) {
     if (!hasMatchingPortalSession) {
       return <ClientLoginPage />;
@@ -28,7 +37,7 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <AuthPage />;
+    return hash.includes("auth") ? <AuthPage /> : <LandingPage />;
   }
 
   return <DashboardPage token={token} email={email} onLogout={logout} />;
