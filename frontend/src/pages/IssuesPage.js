@@ -98,7 +98,7 @@ export default function IssuesPage({ isAuthenticated = false, userEmail = "" }) 
       });
 
       if (!response.ok) {
-        throw new Error("Netlify form submission failed.");
+        throw new Error("Form submission failed.");
       }
 
       setForm({
@@ -108,13 +108,13 @@ export default function IssuesPage({ isAuthenticated = false, userEmail = "" }) 
       setSnack({
         open: true,
         severity: "success",
-        message: "Issue submitted successfully. Netlify has captured the form entry.",
+        message: "We have captured that.",
       });
     } catch (error) {
       setSnack({
         open: true,
         severity: "error",
-        message: error.message || "We could not submit your issue right now.",
+        message: error.message || "We could not submit your input right now.",
       });
     } finally {
       setSubmitting(false);
@@ -232,8 +232,7 @@ export default function IssuesPage({ isAuthenticated = false, userEmail = "" }) 
                   <Box>
                     <Typography variant="h3">Submit an Issue</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      Tell ACTIVA what you ran into. Netlify will capture the submission for now,
-                      and you can connect it to email when you are ready.
+                      Tell ACTIVA what you ran into. .
                     </Typography>
                   </Box>
 
@@ -291,7 +290,7 @@ export default function IssuesPage({ isAuthenticated = false, userEmail = "" }) 
                         alignItems={{ xs: "stretch", sm: "center" }}
                       >
                         <Typography variant="caption" color="text.secondary">
-                          This currently submits through Netlify forms, not the app database.
+                          Compliments are encouraged.
                         </Typography>
                         <Button
                           type="submit"
@@ -328,22 +327,7 @@ export default function IssuesPage({ isAuthenticated = false, userEmail = "" }) 
                   </Stack>
                 </Paper>
 
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h4" sx={{ mb: 2 }}>
-                    What Happens Next
-                  </Typography>
-                  <Stack spacing={1.5}>
-                    <Typography variant="body2" color="text.secondary">
-                      Netlify stores the form submission for this public page.
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Clear, reproducible reports are easier to review and prioritize.
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Your email can be connected to notification handling later without changing the page flow.
-                    </Typography>
-                  </Stack>
-                </Paper>
+                
 
                 <Paper
                   sx={{

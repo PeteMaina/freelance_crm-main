@@ -37,9 +37,7 @@ export default function GlobalFooter() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                 A calmer way to report product friction.
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Public issue intake, founder context, and workspace access in one ACTIVA-styled footer.
-              </Typography>
+              
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Copyright {currentYear} ACTIVA. All rights reserved.
               </Typography>
