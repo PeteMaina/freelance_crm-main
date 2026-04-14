@@ -57,7 +57,7 @@ export default function LandingPage() {
               lineHeight: 1.1
             }}
           >
-            Run every client like a <Box component="span" sx={{ color: 'primary.main' }}>deliberate operation</Box>.
+            Run every project like a <Box component="span" sx={{ color: 'primary.main' }}>deliberate operation</Box>.
           </Typography>
           <Typography
             component="p"

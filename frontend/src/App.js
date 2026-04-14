@@ -7,6 +7,7 @@ import ClientBugDashboard from "./pages/ClientBugDashboard";
 import { PortalAuthProvider, usePortalAuth } from "./contexts/PortalAuthContext";
 import theme from "./theme";
 import LandingPage from "./pages/LandingPage";
+import IssuesPage from "./pages/IssuesPage";
 import { useState, useEffect } from "react";
 
 function AppContent() {
@@ -29,6 +30,10 @@ function AppContent() {
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
+  const normalizedHash = hash.replace(/^#/, "").toLowerCase();
+  const isIssuesRoute = normalizedHash.startsWith("issues");
+  const isAuthRoute = normalizedHash.startsWith("auth");
+
   if (portalToken) {
     if (!hasMatchingPortalSession) {
       return <ClientLoginPage />;
@@ -36,8 +41,12 @@ function AppContent() {
     return <ClientBugDashboard onLogout={portalLogout} />;
   }
 
+  if (isIssuesRoute) {
+    return <IssuesPage isAuthenticated={isAuthenticated} userEmail={email} />;
+  }
+
   if (!isAuthenticated) {
-    return hash.includes("auth") ? <AuthPage /> : <LandingPage />;
+    return isAuthRoute ? <AuthPage /> : <LandingPage />;
   }
 
   return <DashboardPage token={token} email={email} onLogout={logout} />;
