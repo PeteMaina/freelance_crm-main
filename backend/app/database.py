@@ -28,6 +28,10 @@ if not DATABASE_URL:
         "(e.g. postgresql://postgres:postgres@localhost:5432/crm_db)."
     )
 
+# Render/Heroku often provide postgres://, but SQLAlchemy 1.4+ requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Create SQLAlchemy engine
 # Engine is responsible for managing database connection pool
 engine = create_engine(DATABASE_URL)

@@ -27,10 +27,11 @@ def run_migrations():
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations completed successfully.")
     except Exception as e:
-        # Log the error but don't crash the server — if migrations fail
-        # due to an already-applied migration or a transient DB issue,
-        # we still want the app to start.
-        logger.error(f"Migration error (non-fatal): {e}")
+        # Log the error with traceback for production debugging
+        import traceback
+        error_msg = f"Migration error (non-fatal): {e}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        print(f"CRITICAL MIGRATION ERROR: {error_msg}")  # Ensure it shows in container logs
 
 
 @asynccontextmanager
@@ -61,6 +62,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger.info(f"CORS origins configured: {cors_origins}")
+print(f"CORS origins configured: {cors_origins}")
 
 # create_all is kept as a safety net for brand new tables not yet in migrations
 Base.metadata.create_all(bind=engine)

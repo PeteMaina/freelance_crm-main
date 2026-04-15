@@ -65,6 +65,13 @@ def run_migrations_online() -> None:
     # Get database URL from environment variable
     database_url = os.getenv("DATABASE_URL")
 
+    if not database_url:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+
+    # Render/Heroku often provide postgres://, but SQLAlchemy 1.4+ requires postgresql://
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
     # Create engine manually using this URL
     from sqlalchemy import create_engine
     connectable = create_engine(database_url, poolclass=pool.NullPool)

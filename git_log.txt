@@ -1,0 +1,57 @@
+commit cf91ab980e77e2a24fc4471dc8a63db0595fa414
+Author: Pete <peterwahomemaina003@gmail.com>
+Date:   Wed Apr 15 13:23:10 2026 +0300
+
+    fixed missing columns
+
+ ...625599df9cf_add_magic_link_fields_to_clients.py |  34 +++++++++++++++++++++
+ backend/crm.db                                     | Bin 139264 -> 143360 bytes
+ backend/fix_db.py                                  |  25 ++++++++++++++-
+ 3 files changed, 58 insertions(+), 1 deletion(-)
+
+commit 199a5f700245000ef4cd04fab7877c26186843f1
+Author: Pete <peterwahomemaina003@gmail.com>
+Date:   Tue Apr 14 22:43:32 2026 +0300
+
+    cleanup(Issues&Footer)
+
+ frontend/src/components/GlobalFooter.js |  4 +---
+ frontend/src/pages/IssuesPage.js        | 28 ++++++----------------------
+ 2 files changed, 7 insertions(+), 25 deletions(-)
+
+commit db24e38f0d48b6cf488f397c0ba4cacbe3d70b13
+Author: Pete <peterwahomemaina003@gmail.com>
+Date:   Tue Apr 14 22:20:57 2026 +0300
+
+    footer&Issues
+
+ frontend/index.html                     |  10 +-
+ frontend/src/App.js                     |  11 +-
+ frontend/src/components/GlobalFooter.js | 161 ++++++++++---
+ frontend/src/pages/IssuesPage.js        | 408 ++++++++++++++++++++++++++++++++
+ frontend/src/pages/LandingPage.js       |   2 +-
+ 5 files changed, 552 insertions(+), 40 deletions(-)
+
+commit 4d72da636f03247ddc8773d4431bd52e0a27c8d5
+Author: Pete <peterwahomemaina003@gmail.com>
+Date:   Sun Apr 5 22:35:27 2026 +0300
+
+    Landing-page
+
+ frontend/index.html               |  83 ++++++++++++++++-----
+ frontend/src/App.js               |  11 ++-
+ frontend/src/pages/LandingPage.js | 147 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 221 insertions(+), 20 deletions(-)
+
+commit 0271354737fe500785b349435284135c14f83185
+Author: Pete <peterwahomemaina003@gmail.com>
+Date:   Sun Apr 5 21:16:19 2026 +0300
+
+    Copyright Claims
+
+ frontend/src/components/AppShell.js      | 33 +++-----------------
+ frontend/src/components/GlobalFooter.js  | 52 ++++++++++++++++++++++++++++++++
+ frontend/src/pages/AuthPage.js           | 35 +++++++++++++++++++--
+ frontend/src/pages/ClientBugDashboard.js |  6 ++--
+ frontend/src/pages/ClientLoginPage.js    |  6 +++-
+ 5 files changed, 99 insertions(+), 33 deletions(-)
