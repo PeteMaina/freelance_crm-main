@@ -14,7 +14,8 @@ def fix_database():
     # 1. Fix 'calls' table: add 'created_at' and 'user_id'
     if not column_exists('calls', 'created_at'):
         print("Adding 'created_at' to 'calls'...")
-        cursor.execute("ALTER TABLE calls ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+        cursor.execute("ALTER TABLE calls ADD COLUMN created_at DATETIME")
+
     
     if not column_exists('calls', 'user_id'):
         print("Adding 'user_id' to 'calls'...")
@@ -48,6 +49,28 @@ def fix_database():
     if not column_exists('sprints', 'user_id'):
         print("Adding 'user_id' to 'sprints'...")
         cursor.execute("ALTER TABLE sprints ADD COLUMN user_id INTEGER DEFAULT 1")
+
+    # 7. Fix 'clients' table: add missing fields
+    client_columns = {
+        'magic_link_token': 'VARCHAR',
+        'magic_link_password': 'VARCHAR',
+        'magic_link_expires_at': 'DATETIME',
+        'lifetime_value': 'FLOAT DEFAULT 0',
+        'total_revenue': 'FLOAT DEFAULT 0',
+        'project_count': 'INTEGER DEFAULT 0',
+        'health_score': 'INTEGER DEFAULT 100',
+        'engagement_score': 'INTEGER DEFAULT 0',
+        'satisfaction_score': 'INTEGER DEFAULT 0',
+        'communication_frequency': 'INTEGER DEFAULT 0',
+        'custom_fields': 'TEXT',
+        'payment_terms': 'VARCHAR DEFAULT "net30"',
+        'average_project_value': 'FLOAT DEFAULT 0',
+    }
+
+    for col, ctype in client_columns.items():
+        if not column_exists('clients', col):
+            print(f"Adding '{col}' to 'clients'...")
+            cursor.execute(f"ALTER TABLE clients ADD COLUMN {col} {ctype}")
 
     conn.commit()
     conn.close()
