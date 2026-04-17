@@ -1,10 +1,11 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import auth
-from app.database import engine, Base
+from app.database import engine, Base, get_db
+from sqlalchemy.orm import Session
 from app.models import models
 from app.api import client_routes, project_routes, call_routes, notification_routes, client_portal
 from app.api.call_routes import sprint_router, todo_router
@@ -83,3 +84,35 @@ app.include_router(client_portal.router)
 def root():
     """Health check endpoint."""
     return {"message": "ACTIVA Operations API v1.0 is running."}
+
+
+@app.get("/health/diagnostics")
+def diagnostics(db: Session = Depends(get_db)):
+    """Detailed diagnostics for production troubleshooting."""
+    from sqlalchemy import text
+    
+    db_ok = False
+    db_error = None
+    try:
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        db_error = str(e)
+        
+    return {
+        "status": "online",
+        "database": {
+            "connected": db_ok,
+            "error": db_error,
+            "type": engine.url.drivername if engine else "unknown"
+        },
+        "cors": {
+            "configured_origins": cors_origins,
+            "raw_env": os.getenv("CORS_ORIGINS", "not set")
+        },
+        "environment": {
+            "has_secret_key": bool(os.getenv("SECRET_KEY")),
+            "database_url_provided": bool(os.getenv("DATABASE_URL")),
+            "port": os.getenv("PORT", "8000")
+        }
+    }
