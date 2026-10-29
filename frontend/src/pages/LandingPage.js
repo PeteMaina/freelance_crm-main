@@ -57,7 +57,7 @@ export default function LandingPage() {
               lineHeight: 1.1
             }}
           >
-            Run every project like a <Box component="span" sx={{ color: 'primary.main' }}>deliberate operation</Box>.
+            Run every project like <Box component="span" sx={{ color: 'primary.main' }}>It means the world, because it does</Box>.
           </Typography>
           <Typography
             component="p"
@@ -65,7 +65,7 @@ export default function LandingPage() {
             color="text.secondary"
             sx={{ maxWidth: 700, mb: 5, fontWeight: 400, lineHeight: 1.5 }}
           >
-            ACTIVA is the ultimate operations hub designed for elite independent consultants. Stop leaking revenue to poor communication. Start operating flawlessly.
+            ACTIVA is a Freelance platform designed for elite independent consultants. Stop leaking revenue through poor communication. Start operating flawlessly.
           </Typography>
           
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -91,7 +91,7 @@ export default function LandingPage() {
         {/* Feature Matrix */}
         <Box component="section" sx={{ pb: { xs: 8, md: 12 } }}>
           <Typography component="h2" variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
-            The productivity steroid your freelance business needs.
+            The productivity app for your freelance business needs.
           </Typography>
           <Grid container spacing={4}>
             {[
@@ -102,18 +102,18 @@ export default function LandingPage() {
               },
               {
                 icon: <SpeedRoundedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />,
-                title: "Execution Excellence",
+                title: "Faster Execution",
                 desc: "Monitor project momentum and completion percentages instantly. Identify bottlenecks before they happen."
               },
               {
                 icon: <AccessTimeRoundedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />,
                 title: "Asynchronous Workflows",
-                desc: "Never lose a status update again. Keep communication loops tight without unnecessary zooming or calling."
+                desc: "Never lose a status update again. Keep communication loops tight without unnecessary zoom or calling."
               },
               {
                 icon: <AutoGraphRoundedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />,
                 title: "Client Retention Metrics",
-                desc: "By standardizing your operations, your clients stick around longer. It really is that simple."
+                desc: "By standardizing your operations, your clients stick around longer. It's really is that simple."
               }
             ].map((feature, idx) => (
               <Grid item xs={12} sm={6} md={3} key={idx}>
