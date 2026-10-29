@@ -82,7 +82,7 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ACTIVA Operations API v1.0");
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ACTIVA API v1.0");
     c.RoutePrefix = "docs";
 });
 
@@ -92,7 +92,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.MapGet("/", () => new { message = "ACTIVA Operations API v1.0 is running." });
+app.MapGet("/", () => new { message = "ACTIVA v1.0 is running." });
 
 app.MapGet("/health/diagnostics", (ActivaDbContext db) =>
 {
